@@ -29,7 +29,7 @@ install:: $(MAINLIBNAME)
 	@-if test "$(WITH_SHARED)" = "no"; then	\
 	    cp .libs/$(MAINLIBNAME) .libs/$(MAINLIBNAME)i;\
 	fi
-	$(LIBTOOL) $(INSTALL_DATA) $(MAINLIBNAME) $(DESTDIR)$(libdir);
+	$(LIBTOOL) --mode=install $(INSTALL_DATA) $(MAINLIBNAME) $(DESTDIR)$(libdir);
 	@-if test "$(WITH_SHARED)" = "yes"; then	\
 	    $(LIBTOOL) -n --finish $(DESTDIR)$(libdir);\
 	else\
