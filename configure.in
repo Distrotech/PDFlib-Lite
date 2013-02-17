@@ -1,0 +1,1751 @@
+dnl ---------------------------------------------------------------------------*
+dnl               PDFlib - A library for generating PDF on the fly             |
+dnl ---------------------------------------------------------------------------+
+dnl  Copyright (c) 1997-2007 Thomas Merz and PDFlib GmbH. All rights reserved. |
+dnl ---------------------------------------------------------------------------+
+dnl                                                                            |
+dnl     This software is subject to the PDFlib license. It is NOT in the       |
+dnl     public domain. Extended versions and commercial licenses are           |
+dnl     available, please check http://www.pdflib.com.                         |
+dnl                                                                            |
+dnl --------------------------------------------------------------------------*/
+
+dnl $Id: configure.in,v 1.235.2.151 2011/05/02 11:13:01 rjs Exp $
+dnl
+dnl Process this file with autoconf to produce a configure script.
+dnl
+
+# --------------------------------------------------------------------
+# 	PDFlib general setup
+# --------------------------------------------------------------------
+
+dnl source directory sanity check using an arbitrary source file
+AC_INIT(libs/pdcore/pc_config.h)
+
+dnl do not change this (version.sh will do it for you :)
+VERSION="7.0.5p3"
+PDFLIB_MAJOR=7
+PDFLIB_MINOR=0
+PDFLIB_REVISION=5
+
+AC_SUBST(PDFLIB_MAJOR)
+AC_SUBST(PDFLIB_MINOR)
+AC_SUBST(PDFLIB_REVISION)
+
+dnl Important: Interface numbers are completely independent of release
+dnl or version numbers! See doc/readme-source-unix.txt for details.
+
+PDFLIB_LTCURRENT=6
+PDFLIB_LTREVISION=5
+PDFLIB_LTAGE=0
+
+PLOP_LTCURRENT=1
+PLOP_LTREVISION=0
+PLOP_LTAGE=0
+
+TET_LTCURRENT=2
+TET_LTREVISION=0
+TET_LTAGE=1
+
+PCOS_LTCURRENT=1
+PCOS_LTREVISION=0
+PCOS_LTAGE=0
+
+PDFLIB_LTVERSION="$PDFLIB_LTCURRENT:$PDFLIB_LTREVISION:$PDFLIB_LTAGE"
+PLOP_LTVERSION="$PLOP_LTCURRENT:$PLOP_LTREVISION:$PLOP_LTAGE"
+TET_LTVERSION="$TET_LTCURRENT:$TET_LTREVISION:$TET_LTAGE"
+PCOS_LTVERSION="$PCOS_LTCURRENT:$PCOS_LTREVISION:$PCOS_LTAGE"
+
+AC_SUBST(PDFLIB_LTVERSION)
+AC_SUBST(PLOP_LTVERSION)
+AC_SUBST(TET_LTVERSION)
+AC_SUBST(PCOS_LTVERSION)
+
+# do not remove this second RCS Id as we want to have it in the generated
+# configure script
+# $Id: configure.in,v 1.235.2.151 2011/05/02 11:13:01 rjs Exp $
+# required for the pdflib-config script
+AC_SUBST(PDFLIB_LTCURRENT)
+AC_SUBST(PDFLIB_LTREVISION)
+AC_SUBST(PDFLIB_LTAGE)
+
+dnl The name of the library should only be changed in very rare cases,
+dnl such as Digital Unix where a (completely different) libpdf already exists.
+dnl Note: do not include any file name suffix here.
+
+PDFLIBNAME=pdf
+AC_ARG_WITH(pdflibname,[  --with-pdflibname=name  set file name of generated library [default=pdf]],[PDFLIBNAME="$withval"])
+
+MATHLIB="-lm"
+AC_ARG_WITH(libm,[  --with-libm=name        set math library option [default=-lm]],[MATHLIB="$withval"])
+
+AC_SUBST(PDFLIBNAME)
+
+dnl install-sh will be searched (and found) here
+AC_CONFIG_AUX_DIR(config)
+
+builtin(include, config/aclocal.m4)
+
+dnl Check the system name
+AC_CANONICAL_HOST
+
+AC_MSG_CHECKING(MACHDEP)
+if test -z "$MACHDEP"
+then
+    if test -f /usr/lib/NextStep/software_version; then
+	set X `hostinfo | grep 'NeXT Mach.*:' | \
+		sed -e 's/://' -e 's/\./_/'` && \
+	ac_sys_system=next && ac_sys_release=$4
+	MACHDEP="$ac_sys_system$ac_sys_release$ac_sys_cpu"
+    else
+	ac_sys_system=`uname -s`
+	if test "$ac_sys_system" = "AIX" ; then
+		ac_sys_release=`uname -v`
+	else
+		ac_sys_release=`uname -r`
+	fi
+	ac_md_system=`echo $ac_sys_system |
+			   tr -d '[/ ]' | tr '[[A-Z]]' '[[a-z]]'`
+	ac_md_release=`echo $ac_sys_release |
+			   tr -d '[/ ]' | sed 's/\..*//'`
+	MACHDEP="$ac_md_system$ac_md_release"
+    fi
+    case MACHDEP in
+    '')	MACHDEP=unknown;;
+    esac
+fi
+
+AC_MSG_RESULT($MACHDEP)
+
+dnl choose compiler
+AC_PROG_CC
+AC_PROG_CPP
+AC_PROG_INSTALL
+dnl common stuff, unlikely to be changed
+SHELL="/bin/sh"
+RM="rm -rf"
+
+dnl select debugging configuration
+WITH_DEBUG=no
+AC_ARG_ENABLE(debug, [  --enable-debug          turn on debugging],
+if test "$enableval" = "yes" ; then
+    WITH_DEBUG=yes
+fi)
+
+WITH_PROFILE=no
+AC_ARG_ENABLE(profile, [  --enable-profile        turn on profiling],
+if test "$enableval" = "yes" ; then
+    WITH_PROFILE=yes
+fi)
+
+# detect -O2 (only GCC) and move -O2 to PDFOPTIMIZE so that it can be
+# overwritten somewhere where needed
+if test "x$GCC" != "x"; then
+    if test "$CFLAGS" = "-g -O2"; then
+        CFLAGS="-g"
+        PDFOPTIMIZE="-O2"
+    fi
+fi
+
+if test "$WITH_DEBUG" = "yes"; then
+    if test "$PDFOPTIMIZE" = "-O2"; then
+        PDFOPTIMIZE="-DDEBUG"
+    fi
+fi
+
+if test "$WITH_PROFILE" = "yes"; then
+    CFLAGS="$CFLAGS -pg"
+    LDFLAGS="$LDFLAGS -pg"
+fi
+
+dnl We map some system names to a more user-friendly and well-known version
+
+PLATFORM_ID=$ac_sys_system
+PLATFORM="-DPDF_PLATFORM=\\\"\"$ac_sys_system\"\\\""
+WITH_LARGE_FILES=no
+WITH_64BIT=no
+WITH_UNIVERSAL=no
+JAVA_COMPATIBILITY="-source 1.4"
+
+case $ac_sys_system in
+    dnl TODO: check if this is still true
+    dnl Our TIFF code currently requires special handling on AIX
+    aix*|AIX*)
+	if test "$ac_sys_release" = "4"; then
+	    PLATFORM="-DPDF_PLATFORM=\\\"\"AIX4\"\\\""
+	fi
+	CFLAGS="$CFLAGS -DAIX -DPDC_PF_AIX"
+        WITH_LARGE_FILES=yes
+	if test "$GCC" = ""; then
+	    CFLAGS="$CFLAGS -O2 -qthreaded -mxl-compat -D_THREAD_SAFE_ERRNO"
+	    CFLAGS="$CFLAGS -O2"
+	    CXXFLAGS="$CXXFLAGS -O2"
+	    LDFLAGS="$LDFLAGS -O2"
+	else
+	    if test "$ac_sys_release" = "5"; then
+		CFLAGS="$CFLAGS -O2 -pthread"
+	    fi
+	fi
+        if test "$CXX" = "g++"; then
+	    CXXFLAGS="$CXXFLAGS -mxl-compat"
+ 	fi
+        AC_ARG_ENABLE(64bit, [  --enable-64bit          turn on 64bit build],
+        if test "$enableval" = "yes" ; then
+            WITH_64BIT=yes
+        fi)
+        if test "$WITH_64BIT" = "yes"; then
+            PLATFORM="-DPDF_PLATFORM=\\\"\"AIX64\"\\\""
+	    CFLAGS="$CFLAGS -DPDC_PF_AIX64"
+            if test "$GCC" = ""; then
+		CFLAGS="$CFLAGS -q64"
+	    else
+		CFLAGS="$CFLAGS -maix64"
+	    fi
+	fi
+	;;
+
+    cyg*|CYG*) CPPFLAGS="$CPPFLAGS -U_WIN32 -UWIN32 -U__WIN32__ -U_Windows";;
+
+    dnl HP needs option for ANSI mode if the HP compiler is used instead of gcc
+    hp*|HP*)
+        ac_sys_arch=`uname -m`
+	JAVA_COMPATIBILITY=""
+        WITH_LARGE_FILES=yes
+        AC_ARG_ENABLE(64bit, [  --enable-64bit          turn on 64bit build],
+        if test "$enableval" = "yes" ; then
+            WITH_64BIT=yes
+        fi)
+	if test "$GCC" = ""; then
+	    CFLAGS="$CFLAGS -mt"
+	    CFLAGS="$CFLAGS -O"
+	    CXXFLAGS="$CXXFLAGS -O"
+	    LDFLAGS="$LDFLAGS -O"
+	else
+	    CFLAGS="$CFLAGS -pthreads"
+	fi
+        if test "$CXX" != "g++"; then
+	    CXXFLAGS="$CXXFLAGS -AA"
+ 	fi
+        if test "$WITH_64BIT" = "yes"; then
+            if test "$ac_sys_arch" = "ia64" ; then
+                PLATFORM="-DPDF_PLATFORM=\\\"\"HP-UX-ia64-LP64\"\\\""
+            else
+                PLATFORM="-DPDF_PLATFORM=\\\"\"HP-UX-LP64\"\\\""
+            fi
+            CFLAGS="$CFLAGS -DPDC_PF_HPUX_PARISC64"
+            if test "$GCC" = ""; then
+               if test "$ac_sys_arch" = "ia64" ; then
+                  CFLAGS="$CFLAGS -Ae +DD64"
+		  LDFLAGS="$LDFLAGS +DD64"
+		  CXXFLAGS="$CXXFLAGS +DD64"
+               else
+                  CFLAGS="$CFLAGS -Ae +DA2.0W"
+		  LDFLAGS="$LDFLAGS +DA2.0W"
+		  CXXFLAGS="$CXXFLAGS +DA2.0W"
+               fi
+            else
+               if test "$ac_sys_arch" = "ia64" ; then
+		   true
+               else
+		   CFLAGS="$CFLAGS -D_INCLUDE_POSIX_SOURCE"
+		   CFLAGS="$CFLAGS -mpa-risc-2-0"
+		   CXXFLAGS="$CXXFLAGS -mpa-risc-2-0"
+               fi
+	    fi
+        else
+            if test "$ac_sys_arch" = "ia64" ; then
+               PLATFORM_ID="HP-UX-ia64"
+               PLATFORM="-DPDF_PLATFORM=\\\"\"HP-UX-ia64\"\\\""
+               CFLAGS="$CFLAGS -DPDC_PF_HPUX_IA64"
+            else
+               CFLAGS="$CFLAGS -DPDC_PF_HPUX_PARISC"
+                if test "$GCC" = ""; then
+                    CFLAGS="$CFLAGS -Ae +DAportable"
+                else
+                    CFLAGS="$CFLAGS -mpa-risc-1-1"
+                fi
+            fi
+        fi
+  		;;
+
+    irix*|IRIX*)
+	WITH_LARGE_FILES=yes
+	;;
+
+
+    dnl The OSF JNI requires libraries to be built thread-safe, which is true
+    dnl for PDFlib
+    osf1*|OSF1*)
+	WITH_LARGE_FILES=yes
+	if test "$GCC" = ""; then
+	    CFLAGS="$CFLAGS -pthread"
+	else
+	    CFLAGS="$CFLAGS -pthreads"
+	fi;;
+
+    SunOS*)
+        ac_sys_arch=`uname -p`
+	AC_ARG_ENABLE(64bit, [  --enable-64bit          turn on 64bit build],
+	if test "$enableval" = "yes" ; then
+		WITH_64BIT=yes
+	fi)
+
+	WITH_LARGE_FILES=yes
+	if test "$GCC" = ""; then
+	    CFLAGS="$CFLAGS -mt"
+	    LDFLAGS="$LDFLAGS -mt"
+            if test "$ac_sys_arch" = "sparc" ; then
+		CFLAGS="$CFLAGS -xmemalign"
+	    fi
+	    CFLAGS="$CFLAGS -O"
+	    CXXFLAGS="$CXXFLAGS -O"
+	    LDFLAGS="$LDFLAGS -O"
+	else
+	    CFLAGS="$CFLAGS -pthreads"
+	fi
+
+        if test "$WITH_64BIT" = "yes"; then
+            PLATFORM="-DPDF_PLATFORM=\\\"\"SunOS64\"\\\""
+            if test "$ac_sys_arch" = "sparc" ; then
+		LDFLAGS="$LDFLAGS -xarch=v9"
+                CFLAGS="$CFLAGS -DPDC_PF_SOLARIS_SPARC64"
+		if test "$GCC" = ""; then CFLAGS="$CFLAGS -xarch=v9";
+		    CXXFLAGS="$CXXFLAGS -xarch=v9";
+		fi
+            fi
+            if test "$ac_sys_arch" = "i386" ; then
+		LDFLAGS="$LDFLAGS -m64"
+                CFLAGS="$CFLAGS -DPDC_PF_SOLARIS_AMD64"
+                PLATFORM_ID="SunOS-amd64"
+		if test "$GCC" = ""; then
+		    CFLAGS="$CFLAGS -m64";
+		    CXXFLAGS="$CXXFLAGS -m64";
+		fi
+            fi
+        else
+            PLATFORM="-DPDF_PLATFORM=\\\"\"SunOS\"\\\""
+	    AC_ARG_ENABLE(sfio, [  --enable-sfio           turn on sfio build],
+	    if test "$enableval" = "yes" ; then
+                CFLAGS="$CFLAGS -DPDFLIB_SFIO_BUILD"
+                CPPFLAGS="$CPPFLAGS -I/space/home/rjs/src/sfio/include"
+		if test "$ac_sys_arch" = "sparc" ; then
+                    EXTERNALLIBS="$EXTERNALLIBS /space/home/rjs/src/sfio/lib/libsfio-mt.a"
+		else
+                    EXTERNALLIBS="$EXTERNALLIBS /space/home/rjs/src/sfio/lib/libsfio.a"
+		fi
+	    fi)
+            if test "$ac_sys_arch" = "sparc" ; then
+                PLATFORM_ID="SunOS"
+                CFLAGS="$CFLAGS -DPDC_PF_SOLARIS_SPARC"
+            fi
+            if test "$ac_sys_arch" = "i386" ; then
+                PLATFORM_ID="SunOS-i386"
+                CFLAGS="$CFLAGS -DPDC_PF_SOLARIS_INTEL"
+            fi
+        fi
+        ;;
+
+    dnl MacOS X doesn't seem to like -lm, and doesn't actually need it;
+    dnl libtool only works if --with-gnu-ld=yes is supplied, so we try
+    dnl to set it here already.
+    rhapsody|Rhapsody|darwin|Darwin)
+	ac_sys_arch=`uname -p`
+	ac_sys_vers=`uname -r`
+        MAC_ARCH=""
+	LEGACY_ID=""
+
+	PLATFORM_ID="MacOSX"
+        WITH_LARGE_FILES=yes
+	ENABLE_MAC_LEGACY="no"
+	MATHLIB=""
+	with_gnu_ld=yes
+
+	# choose if we do a legacy build (carbon, ...)
+        AC_ARG_ENABLE(mac_legacy, [  --enable-mac_legacy     build legacy (carbon, ...) binaries (Mac), unsupported],
+	if test "$enableval" = "yes" ; then
+	    ENABLE_MAC_LEGACY="yes"
+	    PLATFORM_ID="MacOSX"
+	fi)
+
+	# selecet correct SDK for build
+	# and set min Mac Version we want to be compatible for
+	if test "$ENABLE_MAC_LEGACY" = "yes"; then
+	    CPPFLAGS="$CPPFLAGS -DPDF_MAC_LEGACY"
+	    DEVSDK="/Developer/SDKs/MacOSX10.4u.sdk"
+	    MAC_LDFLAGS="$MAC_LDFLAGS -mmacosx-version-min=10.2"
+	    # add Framework ApplicationServices
+	    LEGACY_ID="-10.4"
+	else
+	    case $ac_sys_vers in
+	    9.*)
+		DEVSDK="/Developer/SDKs/MacOSX10.5.sdk" ;;
+	    10.*)
+		DEVSDK="/Developer/SDKs/MacOSX10.6.sdk"
+	    ;;
+	    esac
+	fi
+	CPPFLAGS="$CPPFLAGS -I/Developer/Headers/FlatCarbon"
+	LDFLAGS="$LDFLAGS -framework ApplicationServices"
+	MAC_CFLAGS="$MAC_CFLAGS -isysroot $DEVSDK"
+	MAC_LDFLAGS="$MAC_LDFLAGS -Wl,-syslibroot,$DEVSDK"
+
+	# set PLATFROM ID
+	# will be completed in pc_config.h (32/64 ppc/intel)
+	case $ac_sys_system in
+	rhapsody|Rhapsody)
+	    PLATFORM="-DPDF_MAC_PLATFORM=\\\"\"Mac OS X Server$LEGACY_ID\"\\\"";;
+	darwin|Darwin)
+	    PLATFORM="-DPDF_MAC_PLATFORM=\\\"\"Mac OS X$LEGACY_ID\"\\\"";;
+	esac
+
+	# Build Universal Binaries ?
+        AC_ARG_ENABLE(universal, [  --enable-universal      build universal binaries (Mac), unsupported],
+	if test "$enableval" = "yes" ; then
+	    WITH_UNIVERSAL=yes
+	fi)
+
+	# set --arch flags
+	AC_ARG_WITH(macarch,
+	    [  --with-macarch=architecture  Mac OSX architecture to build for, unsupported.],
+	    [MAC_ARCH="$withval"],[MAC_ARCH=default])
+	AC_MSG_CHECKING(Mac build Architecture)
+	case $MAC_ARCH in
+	    i386)
+		MAC_CFLAGS="$MAC_CFLAGS -arch i386"
+		MAC_LDFLAGS="$MAC_LDFLAGS -arch i386"
+	    ;;
+	    x86_64)
+		# we do 64 bit builds >= 10.5 only
+		case $ac_sys_vers in
+		9.*)
+		    MAC_CFLAGS="$MAC_CFLAGS -arch x86_64"
+		    MAC_LDFLAGS="$MAC_LDFLAGS -arch x86_64"
+		;;
+		10.*)
+		    MAC_CFLAGS="$MAC_CFLAGS -arch x86_64"
+		    MAC_LDFLAGS="$MAC_LDFLAGS -arch x86_64"
+		;;
+		esac
+	    ;;
+	    ppc)
+		# not on 10.6
+		case $ac_sys_vers in
+		8.*| 9.*)
+		    MAC_CFLAGS="$MAC_CFLAGS -arch ppc"
+		    MAC_LDFLAGS="$MAC_LDFLAGS -arch ppc"
+		;;
+		esac
+	    ;;
+	    ppc64)
+		# we do 64 bit builds on 10.5 only
+		case $ac_sys_vers in
+		9.*)
+		    MAC_CFLAGS="$MAC_CFLAGS -arch ppc64"
+		    MAC_LDFLAGS="$MAC_LDFLAGS -arch ppc64"
+		;;
+		esac
+	    ;;
+	    universal)
+		case $ac_sys_vers in
+		8.*)
+		    MAC_CFLAGS="$MAC_CFLAGS -arch i386 -arch ppc"
+		    MAC_LDFLAGS="$MAC_LDFLAGS -arch i386 -arch ppc"
+		;;
+		9.*)
+		    MAC_CFLAGS="$MAC_CFLAGS -arch i386 -arch ppc -arch ppc64 -arch x86_64"
+		    MAC_LDFLAGS="$MAC_LDFLAGS -arch i386 -arch ppc -arch ppc64 -arch x86_64"
+		;;
+		10.*)
+		    MAC_CFLAGS="$MAC_CFLAGS -arch i386 -arch x86_64"
+		    MAC_LDFLAGS="$MAC_LDFLAGS -arch i386 -arch x86_64"
+		;;
+		esac
+	    ;;
+	    *) echo"unknown architecture (--with-macarch)"
+	    ;;
+	esac
+        AC_SUBST(MAC_CFLAGS)
+        AC_SUBST(MAC_LDFLAGS)
+	AC_MSG_RESULT($MAC_CFLAGS $MAC_LDFLAGS)
+	;;
+
+    dnl TODO: add sparc, ...
+    linux|Linux*)
+       ac_sys_arch=`uname -m`
+       WITH_LARGE_FILES=yes
+
+       # neccesary to allow gcc 2.95 builds to be used with gcc3 systems
+       CFLAGS="$CFLAGS -D__NO_CTYPE"
+       if test "$ac_sys_arch" = "s390" ; then
+	   CFLAGS="$CFLAGS -DPDC_PF_LINUX_OS390"
+	   PLATFORM_ID="zSeries-Linux"
+	   PLATFORM="-DPDF_PLATFORM=\\\"\"zSeries Linux\"\\\""
+       fi
+       if test "$ac_sys_arch" = "ppc" ; then
+	   PLATFORM_ID="Linux-ppc"
+	   PLATFORM="-DPDF_PLATFORM=\\\"\"Linux-ppc\"\\\""
+       fi
+       if test "$ac_sys_arch" = "i686" ; then
+	   CFLAGS="$CFLAGS -DPDC_PF_LINUX_IA32"
+	   # add assemblymodule for zlib
+	   FLATE_ASM_OBJ="match\$(LO)"
+	   CFLAGS="$CFLAGS -DASMV"
+	   AC_SUBST(FLATE_ASM_OBJ)
+	   # strange errors with optimizer for some modules on this platform
+	   NO_O="_no-O"
+	   AC_SUBST(NO_O)
+       fi
+       if test "$ac_sys_arch" = "ia64" ; then
+	   CFLAGS="$CFLAGS -DPDC_PF_LINUX_IA64"
+           PLATFORM_ID="Linux-ia64"
+           PLATFORM="-DPDF_PLATFORM=\\\"\"Linux-ia64\"\\\""
+       fi
+       if test "$ac_sys_arch" = "x86_64" ; then
+	   CFLAGS="$CFLAGS -DPDC_PF_LINUX_X86_64"
+           PLATFORM_ID="Linux-x86_64"
+           PLATFORM="-DPDF_PLATFORM=\\\"\"Linux-x86_64\"\\\""
+       fi
+       ;;
+
+
+    FreeBSD)
+       WITH_LARGE_FILES=yes
+       tmp_vers=`uname -r`
+       case $tmp_vers in
+       5.*)
+           PLATFORM="-DPDF_PLATFORM=\\\"\"FreeBSD5\"\\\"" ;;
+       6.*)
+           PLATFORM="-DPDF_PLATFORM=\\\"\"FreeBSD6\"\\\"" ;;
+       7.*)
+           PLATFORM="-DPDF_PLATFORM=\\\"\"FreeBSD7\"\\\"" ;;
+       esac
+       ;;
+
+    OpenBSD)
+       WITH_LARGE_FILES=yes
+       CFLAGS="$CFLAGS -DPDC_PF_OPENBSD"
+       tmp_vers=`uname -r`
+       if test "$tmp_vers" = "3.4" ; then
+           PLATFORM="-DPDF_PLATFORM=\\\"\"OpenBSD34\"\\\""
+       fi
+       ;;
+
+    dnl OS/390 specials
+    *OS/390*)
+	CFLAGS="$CFLAGS -DOS390"
+	CC=c89
+	LD=c89
+	WITH_LARGE_FILES=yes
+	PLATFORM_ID=OS390
+        PLATFORM="-DPDF_PLATFORM=\\\"\"zSeries USS\"\\\""
+        
+	CFLAGS="$CFLAGS -2 -W \"c,GONUM,LANGLVL(EXTENDED),FLOAT(IEEE),RENT,ENUM(INT)\""
+	;;
+
+    *)	;;
+esac
+
+GENERATED_FILES=""
+
+dnl 2GB Support
+AC_ARG_ENABLE(large_files,[  --enable-large_files    enable support for files large than 2GB],
+if test "$enableval" = "yes" ; then
+    WITH_LARGE_FILES=yes
+else
+    WITH_LARGE_FILES=no
+fi)
+
+
+dnl add special compileoptions for xplink
+WITH_XPLINK=no
+AC_ARG_ENABLE(xplink, [  --enable-xplink         xplink and dynamic linking (z/OS USS)],
+if test "$enableval" = "yes" ; then
+    WITH_XPLINK=yes
+fi)
+
+if test "$WITH_XPLINK" = "yes"; then
+    case $ac_sys_system in
+    *OS/390*)
+        dnl There are additional flags for the C compiler only for
+        dnl building the dll main object ("-Wc,EXPORTALL,DLL"). These are
+        dnl defined directly in "config/mkmainlib.uss_xplink.inc.in"
+	CFLAGS="-Wc,XPLINK,DLL $CFLAGS"
+	LDFLAGS="-Wl,XPLINK,DLL $LDFLAGS"
+	;;
+    *)	;;
+    esac
+fi
+
+# on z/OS USS, having -g on the command line overrides the optimization
+# always, but configure will always add it to the CFLAGS if the compiler
+# does accept it, so we have to remove it if debugging is not explicitely
+# switched on
+if test "$WITH_DEBUG" = "no"; then
+    case $ac_sys_system in
+    *OS/390*)
+	CFLAGS=`echo "$CFLAGS" | sed -e s/-g//`
+	;;
+    *)	;;
+    esac
+fi
+
+dnl PDFLIB_TIFFWRITE_SUPPORT (needed for TET)
+AC_ARG_ENABLE(tiffwrite,[  --enable-tiffwrite      enable write support for tifflib],
+if test "$enableval" = "yes" ; then
+    TIFFWRITE=" -DPDFLIB_TIFFWRITE_SUPPORT"
+else
+    TIFFWRITE=""
+fi)
+
+dnl BUILD without SECURITY code
+AC_ARG_ENABLE(security,[  --disable-security      Build without Security Code ],
+if test "$enableval" = "no" ; then
+    CFLAGS="$CFLAGS -DPDF_NOSECURITY_BUILD"
+fi)
+
+# Don't set the EXE suffix, as cygwin builds don't work then
+#AC_EXEEXT
+AC_SUBST(EXEEXT)
+AC_OBJEXT
+
+dnl Prepare libtool
+dnl Required for dlopening our libraries, as done in the language interpreters.
+
+AC_LIBTOOL_DLOPEN
+AC_LIBTOOL_WIN32_DLL
+AC_PROG_LIBTOOL
+
+AC_SUBST(PLATFORM_ID)
+AC_SUBST(SHELL)
+AC_SUBST(OBJEXT)
+AC_SUBST(VERSION)
+AC_SUBST(CC)
+AC_SUBST(RM)
+AC_SUBST(TIFFWRITE)
+AC_SUBST(PDFOPTIMIZE)
+
+# --------------------------------------------------------------------
+# 	PDFlib Java binding (JNI)
+# --------------------------------------------------------------------
+
+WITH_JAVA=yes
+JAVAINCLUDE=""
+JAVAPACKAGE=""
+
+AC_ARG_WITH(java,[  --with-java=path        full path of Java Developers Kit, or no],[
+case $withval in
+    no) WITH_JAVA=no ;;
+    yes) WITH_JAVA=yes ;;
+    *) JAVAPACKAGE=$withval
+    ;;
+esac
+])
+
+if test "$WITH_JAVA" != "no" ; then
+    WITH_JAVA=no
+    AC_MSG_CHECKING(for Java header files)
+
+    # try without any precautions
+    AC_TRY_CPP([#include <jni.h>], WITH_JAVA=yes,
+	[ dirs="$prefix /usr/lib/java /usr/java /usr/local/diablo-jdk1.5.0 /usr/java/jdk1.4 /usr/lib/jdk1.4 /opt/java1.4 /usr/lpp/java/J1.4 /usr/java/jdk1.4 /usr/lib/jdk1.4 /usr/jdk14 /jdk1.4 /usr/java/jdk1.3 /usr/include/java /usr/local/java /usr/local/include/kaffe /usr/lib/jdk1.3 /opt/java1.3 /usr/lpp/java/J1.3 /usr/java/jdk1.2 /usr/lib/jdk1.2.2 /usr/lib/jdk1.2.1 /usr/jdk122 /usr/lib/jdk122 /usr/lib/jdk1.2.1 /opt/java1.2 /usr/lpp/java/J1.2 /usr/lib/jdk1.1.8 /usr/jdk118 /usr/lib/jdk118 /usr/lpp/java/J1.1 /opt/java1.1 /usr /opt/local /jdk1.3 /jdk1.2.3 /jdk1.2.2 /jdk1.2.1 /usr/java130 /System/Library/Frameworks/JavaVM.framework/Headers /usr/jdk_base/include /usr/java14 /u/open1/pdf/java/J1.4"
+
+	if test "$JAVAPACKAGE" != ""; then
+	    dirs="$JAVAPACKAGE $dirs"
+	fi
+
+	# now try to find jni.h
+	for i in $dirs ; do
+	    if test -r $i/jni.h; then
+		JAVAINCLUDE="$i"
+		break
+	    elif test -r $i/include/jni.h; then
+		JAVAINCLUDE="$i/include"
+		break
+	    fi
+	done
+    ])
+
+    # now try with an include path
+    if test "$JAVAINCLUDE" != ""; then
+	OCPPFLAGS="$CPPFLAGS"
+	CPPFLAGS="-I$JAVAINCLUDE $OCPPFLAGS"
+	AC_TRY_CPP([#include <jni.h>], [
+		WITH_JAVA=yes
+		JAVAINCLUDE="-I$JAVAINCLUDE"
+	],)
+	CPPFLAGS="$OCPPFLAGS"
+    fi
+
+    # if the above didn't work probably jni_md.h is missing
+    if test "WITH_JAVA" != "yes" ; then
+	if test "$JAVAINCLUDE" != ""; then
+	    subdirs="$JAVAINCLUDE $JAVAINCLUDE/$MACHDEP $JAVAINCLUDE/$ac_md_system $JAVAINCLUDE/solaris $JAVAINCLUDE/genunix $JAVAINCLUDE/alpha $JAVAINCLUDE/win32 $JAVAINCLUDE/mvs $JAVAINCLUDE/irix"
+	    for i in $subdirs ; do
+		if test -r $i/jni_md.h; then
+		    JAVAINCLUDE="-I$JAVAINCLUDE -I$i"
+		    WITH_JAVA=yes
+		    break
+		fi
+	    done
+	fi
+    fi
+
+    if test "$WITH_JAVA" = "no"; then
+	AC_MSG_RESULT(not found)
+    else
+	AC_MSG_RESULT($JAVAINCLUDE)
+	AC_SUBST(JAVAINCLUDE)
+    fi
+
+fi
+
+# ----------------------------------------------------------------
+#  PDFlib Perl binding
+# ----------------------------------------------------------------
+
+WITH_PERL=yes
+PERLBIN=nope
+PERLINCLUDE=nope
+
+AC_ARG_WITH(perl,[  --with-perl=path        full path of Perl executable, or no],[PERLBIN="$withval"],[PERLBIN=nope])
+
+if test "$PERLBIN" = "no" ; then
+    WITH_PERL=no
+fi
+
+AC_ARG_WITH(perlincl,[  --with-perlincl=path    full path of Perl include directory],[PERLINCLUDE="$withval"],[PERLINCLUDE=nope])
+
+if test "$WITH_PERL" = "yes" ; then
+
+    WITH_PERL=no
+    dnl First figure out what the name of Perl is
+    if test "$PERLBIN" = "nope"; then
+	AC_CHECK_PROGS(PERL, perl perl5.7.0 perl5.6.0 perl5.005 perl5.004 perl5.003 perl5.002 perl5.001 perl5, nope)
+    else
+	PERL="$PERLBIN"
+    fi
+    AC_MSG_CHECKING(for Perl header file)
+    if test "$PERL" != "nope"; then
+	PERL5DIR=`($PERL -e 'use Config; print $Config{archlib};') 2>/dev/null`
+	if test "$PERL5DIR" != ""; then
+	    if test "$PERLINCLUDE" = "nope"; then
+		if test -r "$PERL5DIR/perl.h"; then
+		    AC_MSG_RESULT(PERL5DIR/perl.h)
+		    WITH_PERL=yes
+		    PERLINCLUDE="$PERL5DIR"
+		elif test -r "$PERL5DIR/CORE/perl.h"; then
+		    AC_MSG_RESULT($PERL5DIR/CORE/perl.h)
+		    WITH_PERL=yes
+		    PERLINCLUDE="$PERL5DIR/CORE"
+		fi
+	    else
+		WITH_PERL=yes
+		AC_MSG_RESULT($PERLINCLUDE)
+	    fi
+	    if test "$PERLINCLUDE" = "nope"; then
+		AC_MSG_RESULT(could not locate perl.h...)
+		WITH_PERL=no
+	    fi
+	else
+	    AC_MSG_RESULT(unable to determine Perl configuration)
+	    WITH_PERL=no
+	fi
+
+	PERLLIBDIR=`($PERL -e 'use Config; print $Config{sitearchexp};') 2>/dev/null`
+	if test -z "$PERLLIBDIR" -o ! -d "$PERLLIBDIR"; then
+	    AC_MSG_RESULT(         unable to determine perl shared library directory)
+	fi
+
+    else
+	AC_MSG_RESULT(could not figure out how to run perl)
+	PERLINCLUDE="/usr/local/lib/perl5/5.6.0/archname/CORE"
+    fi
+
+    dnl The Perl include files contain special handling for the bool type
+    dnl on NeXT (sigh). We'll run into trouble if we don't work around this.
+
+    case $ac_sys_system in
+	    NeXT|next) PERLBOOLDEF="";;
+	    *)	PERLBOOLDEF="-Dbool=char -DHAS_BOOL";;
+    esac
+
+    dnl Some platforms require linking the perl library directly.
+    dnl We use $PERLINCLUDE for this since it both contains the Perl library
+    dnl _and_ the include files. Other systems don't explicitly link the
+    dnl Perl library.
+    dnl $MATHLIB comes from EXTERNALLIBS if needed
+
+    case $ac_sys_system/$ac_sys_release in
+	hp*|HP*)     PERLLINK="";;
+	cyg*|CYG*)   PERLLINK="-L$PERLINCLUDE -lperl $PERLLINK";;
+	aix*|AIX*)   PERLLINK="-L$PERLINCLUDE -lperl $PERLLINK";;
+	osf1*|OSF1*) PERLLINK="-L$PERLINCLUDE -lperl $PERLLINK";;
+	darwin|Darwin*) PERLLINK="-L$PERLINCLUDE -lperl $PERLLINK";;
+	*) ;;
+    esac
+
+    PERLINCLUDE="-I$PERLINCLUDE"
+    AC_SUBST(PERLINCLUDE)
+    AC_SUBST(PERLLIBDIR)
+    AC_SUBST(PERLBOOLDEF)
+    AC_SUBST(PERLLINK)
+    AC_SUBST(PERL)
+fi
+
+# ----------------------------------------------------------------
+#  PDFlib Python binding
+# ----------------------------------------------------------------
+
+if test -d bind/pdflib/python; then
+    WITH_PYTHON=yes
+else
+    WITH_PYTHON=no
+fi
+
+PYINCLUDE=nope
+PYPACKAGE=nope
+
+AC_ARG_WITH(py,[  --with-py=path          full path of Python root directory, or no],[PYPACKAGE="$withval"], [PYPACKAGE=nope])
+
+if test "$PYPACKAGE" = "no" ; then
+    WITH_PYTHON=no
+fi
+
+AC_ARG_WITH(pyincl,[  --with-pyincl=path      full path of Python include directory],[PYINCLUDE="$withval"], [PYINCLUDE=nope])
+
+if test "$PYINCLUDE" = "nope" -a "$PYPACKAGE" != "nope"; then
+	PYINCLUDE="$PYPACKAGE/include"
+fi
+
+if test "$WITH_PYTHON" != "no" ; then
+    WITH_PYTHON=no
+    AC_MSG_CHECKING(for Python header files)
+
+    dirs="$PYINCLUDE 			\
+    $PYINCLUDE/python2.5                \
+    $prefix/include/python2.5           \
+    /usr/local/include/python2.5        \
+    /usr/include/python2.5              \
+    $prefix/include/python2.5           \
+    $PYINCLUDE/python2.4                \
+    $prefix/include/python2.4           \
+    /usr/local/include/python2.4        \
+    /usr/include/python2.4              \
+    $prefix/include/python2.4           \
+    $PYINCLUDE/python2.3                \
+    $prefix/include/python2.3           \
+    /usr/local/include/python2.3        \
+    /usr/include/python2.3              \
+    $prefix/include/python2.3           \
+    $PYINCLUDE/python2.2                \
+    $prefix/include/python2.2           \
+    /usr/local/include/python2.2        \
+    /usr/include/python2.2              \
+    $prefix/include/python2.2           \
+    $PYINCLUDE/python2.1                \
+    $prefix/include/python2.1           \
+    /usr/local/include/python2.1        \
+    /usr/include/python2.1              \
+    $prefix/include/python2.1           \
+    $PYINCLUDE/python2.0 		\
+    $prefix/include/python2.0 		\
+    /usr/local/include/python2.0 	\
+    /usr/include/python2.0 		\
+    $prefix/include/python2.0		\
+    $PYINCLUDE/python1.6		\
+    $prefix/include/python1.6		\
+    /usr/local/include/python1.6	\
+    /usr/include/python1.6		\
+    $prefix/include/python1.6		\
+    $PYINCLUDE/python1.5		\
+    $prefix/include/python1.5		\
+    /usr/local/include/python1.5	\
+    /usr/include/python1.5		\
+    $prefix/include/python1.5		\
+    $PYINCLUDE/python1.4		\
+    $prefix/include/python1.4		\
+    /usr/local/include/python1.4	\
+    /usr/include/python1.4		\
+    $prefix/include/python1.4"
+    for i in $dirs ; do
+	    if test -r $i/Python.h; then
+		    AC_MSG_RESULT($i)
+		    PYINCLUDE="-I$i"
+		    WITH_PYTHON=yes
+		    break
+	    fi
+    done
+    if test "$PYINCLUDE" = "nope" -o "$PYINCLUDE" = "$PYPACKAGE/include"; then
+	AC_MSG_RESULT(not found)
+	WITH_PYTHON=no
+    fi
+
+    AC_SUBST(PYINCLUDE)
+
+    AC_CHECK_PROGS(PYTHONBIN, python, nope)
+
+    if test "$PYTHONBIN" = "nope" ; then
+	WITH_PYTHON=no
+    fi
+
+    if test "$WITH_PYTHON" = "yes" ; then
+	AC_MSG_CHECKING(for Python shared library path)
+
+	if test "$PYTHONBIN" = "nope" ; then
+	    WITH_PYTHON=no
+	else
+	    PYTHONLIBDIR=`cat << EOF | python
+import sys
+import string
+print string.join(filter(lambda x: -1 != string.find(x, 'dynload'), sys.path))
+EOF
+`
+	    if test "$PYTHONLIBDIR" = "" ; then
+		PYTHONLIBDIR=/usr/lib
+	    fi
+	    AC_SUBST(PYTHONLIBDIR)
+
+	fi
+
+	AC_MSG_RESULT($PYTHONLIBDIR)
+    fi
+fi
+
+# ----------------------------------------------------------------
+#  PDFlib Ruby binding
+# ----------------------------------------------------------------
+
+if test -d bind/pdflib/ruby; then
+    WITH_RUBY=yes
+else
+    WITH_RUBY=no
+fi
+
+RUBYINCLUDE=nope
+RUBYBIN=nope
+
+AC_ARG_WITH(ruby,[  --with-ruby=path        x, or no],[RUBYBIN="$withval"], [RUBYBIN=nope])
+
+if test "$RUBYBIN" = "no" ; then
+    WITH_RUBY=no
+fi
+
+AC_ARG_WITH(rubyincl,[  --with-rubyincl=path    full path of Ruby include directory],[RUBYINCLUDE="$withval"], [RUBYINCLUDE=nope])
+
+if test "$WITH_RUBY" != "no" ; then
+    WITH_RUBY=no
+    dnl First figure out what the name of Ruby is
+    if test "$RUBYBIN" = "nope"; then
+	AC_CHECK_PROGS(RUBY, ruby, nope)
+    else
+	RUBY="$RUBYBIN"
+    fi
+
+if test "$RUBYBIN" = "nope" ; then
+    WITH_RUBY=no
+fi
+
+    AC_MSG_CHECKING(for Ruby header files)
+
+    dirs="$RUBYINCLUDE 			\
+    /usr/lib/ruby/1.8/i686-linux 	\
+    /usr/lib/ruby/1.8/universal-darwin9.0 \
+    /usr/lib/ruby/1.8/universal-darwin8.0 \
+    /usr/local/lib/ruby/1.8/i686-linux 	\
+    /usr/local/lib/ruby/1.8/x86_64-linux 	\
+    /usr/local/lib/ruby/1.8/sparc-solaris2.8 	\
+    /usr/local/lib/ruby/1.8/sparc-solaris2.9 	\
+    /usr/local/lib/ruby/1.8/sparc-solaris2.10 	\
+    /usr/local/lib/ruby/1.8/i386-solaris2.10 	\
+    /opt/sfw/lib/ruby/1.8/i386-solaris2.10 	\
+    /usr/local/lib/ruby/1.8/i386-freebsd4.8 	\
+    /usr/local/lib/ruby/1.8/i386-freebsd5.3 	\
+    /usr/local/lib/ruby/1.8/amd64-freebsd6	\
+    /usr/local/lib/ruby/1.8/i386-freebsd6 	\
+    /usr/local/lib/ruby/1.8/amd64-freebsd7	\
+    /usr/local/lib/ruby/1.8/i386-freebsd7 	\
+    /usr/local/lib/ruby/1.8/universal-darwin8.0 \
+    /usr/local/lib/ruby/1.8/powerpc-darwin7.9.0 \
+    /usr/lib/ruby/1.8/universal-darwin9.0	\
+    /usr/lib/ruby/1.8/universal-darwin10.0	\
+    "
+    for i in $dirs ; do
+	if test -r $i/ruby.h; then
+	    AC_MSG_RESULT($i)
+	    RUBYINCLUDE="-I$i"
+	    RUBYLIBDIR="$i"
+	    WITH_RUBY=yes
+	    break
+	fi
+    done
+    if test "$RUBYINCLUDE" = "nope"; then
+	AC_MSG_RESULT(not found)
+	WITH_RUBY=no
+    fi
+
+    AC_SUBST(RUBYINCLUDE)
+    AC_SUBST(RUBYLIBDIR)
+    AC_SUBST(RUBY)
+
+fi
+
+# --------------------------------------------------------------------
+# 	PDFlib Tcl binding
+# --------------------------------------------------------------------
+
+if test -d bind/pdflib/tcl; then
+    WITH_TCL=yes
+else
+    WITH_TCL=no
+fi
+
+TCLINCLUDE=nope
+TCLPACKAGEDIR=nope
+TCLBIN=nope
+
+AC_ARG_WITH(tcl,[  --with-tcl=path         full path of Tcl executable, or no],[TCLBIN="$withval"])
+
+if test "$TCLBIN" = "no" ; then
+    WITH_TCL=no
+fi
+
+AC_ARG_WITH(tclpkg,[  --with-tclpkg=path      full path of Tcl package install directory],[TCLPACKAGEDIR="$withval"],[TCLPACKAGEDIR=nope])
+
+AC_ARG_WITH(tclincl,[  --with-tclincl=path     full path of Tcl include directory],[TCLINCLUDE="$withval"],[TCLINCLUDE=nope])
+
+if test "$WITH_TCL" = "yes" ; then
+    WITH_TCL=no
+    AC_MSG_CHECKING(for Tcl header files)
+
+    if test "$TCLINCLUDE" = "nope"; then
+	AC_TRY_CPP([#include <tcl.h>], , TCLINCLUDE="nope")
+	if test "$TCLINCLUDE" = "nope"; then
+	    dirs="\
+	    $prefix/include \
+	    /usr/sfw/include \
+	    /opt/sfw/include \
+	    /usr/local/include/tcl8.4 \
+	    /usr/local/include \
+	    /usr/include \
+	    /opt/local/include \
+	    /home/sci/local/include \
+	    /usr/pkg/include \
+	    /System/Library/Frameworks/Tcl.framework/Versions/8.3/Headers \
+	    /System/Library/Frameworks/Tcl.framework/Versions/8.2/Headers"
+	    for i in $dirs ; do
+		if test -r $i/tcl.h; then
+		    AC_MSG_RESULT($i)
+		    TCLINCLUDE="$i"
+		    WITH_TCL=yes
+		    break
+		fi
+	    done
+	fi
+
+	if test "$TCLINCLUDE" = "nope"; then
+	    AC_MSG_RESULT(not found)
+	    WITH_TCL=no
+	fi
+    else
+	AC_MSG_RESULT($TCLINCLUDE)
+    fi
+
+    dnl We need at least Tcl 8.0 because of its support for binary strings
+    dnl and the object interface.
+
+    if test "$TCLINCLUDE" != "nope" -a "$TCLBIN" = "nope"; then
+	AC_CHECK_PROGS(TCL, tclsh tclsh8.4 tclsh8.3 tclsh8.2 tclsh8.1 tclsh8.0, nope)
+	TCLBIN=$TCL
+    fi
+
+    if test "$TCLINCLUDE" = "nope" -o "$TCLBIN" = "nope"; then
+	WITH_TCL=no
+    else
+	dnl Check the installed Tcl version -- must be 8.0 or higher
+	TCLVERSION=`echo "puts [[info tclversion]]" | $TCLBIN`
+	if test  "$TCLVERSION" = "7.6" -o "$TCLVERSION" = "7.5" -o  "$TCLVERSION" = "7.4" -o "$TCLVERSION" = "7.3" -o "$TCLVERSION" = "7.1" -o "$TCLVERSION" = "7.0"; then
+	    AC_MSG_RESULT([         Tcl version 8.0 or newer is required for PDFlib.])
+	    AC_MSG_RESULT([         PDFlib support for Tcl will not be built.])
+	    WITH_TCL=no
+	else
+	    if test  "$TCLVERSION" = "8.0" -o "$TCLVERSION" = "8.1"; then
+		AC_MSG_RESULT([         The PDFlib build process requires Tcl 8.2 or above. Please read])
+		AC_MSG_RESULT([         bind/tcl/readme.txt for instructions on manually building PDFlib])
+		AC_MSG_RESULT([         for Tcl 8.0 or 8.1.])
+	    fi
+
+	    if test "$TCLPACKAGEDIR" = "nope"; then
+	    dnl Let tcl decide where to install the package
+		TCLPACKAGEDIR=`(echo "puts \\$auto_path" | "$TCLBIN" | awk '{print $1}') 2>/dev/null`
+	    fi
+
+	    if test "$TCLPACKAGEDIR" = "nope" -o -z "$TCLPACKAGEDIR" -o ! -d "$TCLPACKAGEDIR"; then
+		AC_MSG_RESULT(unable to determine Tcl package directory)
+		WITH_TCL=no
+
+	    else
+
+		TCLPACKAGEDIR=$TCLPACKAGEDIR/pdflib
+		WITH_TCL=yes
+	    fi
+	fi
+    fi
+fi
+
+TCLINCLUDE="-I$TCLINCLUDE"
+AC_SUBST(TCLINCLUDE)
+AC_SUBST(TCLPACKAGEDIR)
+AC_SUBST(TCLBIN)
+
+# ----------------------------------------------------------------
+#  PDFlib/PLOP auxiliary libraries:
+#  We support only our own copy of tifflib, libpng and zlib
+#  pdcore is needed in all configurations
+# ----------------------------------------------------------------
+
+# The list of Makefile targets for our internal libraries
+# pdcore is always needed
+
+PDCORELIBINC="-I\$(top_builddir)/libs/pdcore"
+PDCORELIBLINK="\$(top_builddir)/libs/pdcore/libpdcore\$(LA)"
+LIBTARGETS="$LIBTARGETS pdcore"
+BINDTARGETS=""
+PROGTARGETS=""
+
+AC_SUBST(PDCORELIBINC)
+AC_SUBST(PDCORELIBLINK)
+
+AC_C_BIGENDIAN()
+
+# font
+if test -d libs/font ; then
+    FONTLIBINC="-I\$(top_builddir)/libs/font"
+    FONTLIBLINK="\$(top_builddir)/libs/font/libfont\$(LA)"
+    LIBTARGETS="$LIBTARGETS font"
+else
+    FONTLIBINC=""
+    FONTLIBLINK=""
+fi
+AC_SUBST(FONTLIBLINK)
+AC_SUBST(FONTLIBINC)
+
+# zlib
+if test -d libs/flate ; then
+    FLATELIBINC="-I\$(top_builddir)/libs/flate"
+    FLATELIBLINK="\$(top_builddir)/libs/flate/libz\$(LA)"
+    LIBTARGETS="$LIBTARGETS flate"
+else
+    FLATELIBINC=""
+    FLATELIBLINK=""
+fi
+AC_SUBST(FLATELIBLINK)
+AC_SUBST(FLATELIBINC)
+
+# pnglib
+if test -d libs/png ; then
+    PNGLIBINC="-I\$(top_builddir)/libs/png"
+    PNGLIBLINK="\$(top_builddir)/libs/png/libpng\$(LA)"
+    LIBTARGETS="$LIBTARGETS png"
+else
+    PNGLIBINC=""
+    PNGLIBLINK=""
+fi
+AC_SUBST(PNGLIBINC)
+AC_SUBST(PNGLIBLINK)
+
+# tifflib
+if test -d libs/tiff ; then
+    TIFFLIBINC="-I\$(top_builddir)/libs/tiff"
+    TIFFLIBLINK="\$(top_builddir)/libs/tiff/libtiff\$(LA)"
+    LIBTARGETS="$LIBTARGETS tiff"
+else
+    TIFFLIBINC=""
+    TIFFLIBLINK=""
+fi
+AC_SUBST(TIFFLIBINC)
+AC_SUBST(TIFFLIBLINK)
+
+# jpeglib
+if test -d libs/jpeg ; then
+    JPEGLIBINC="-I\$(top_builddir)/libs/jpeg"
+    JPEGLIBLINK="\$(top_builddir)/libs/jpeg/libjpeg\$(LA)"
+    LIBTARGETS="$LIBTARGETS jpeg"
+else
+    JPEGLIBINC=""
+    JPEGLIBLINK=""
+fi
+AC_SUBST(JPEGLIBINC)
+AC_SUBST(JPEGLIBLINK)
+
+# expat
+if test -d libs/expat ; then
+    EXPATLIBINC="-I\$(top_builddir)/libs/expat"
+    EXPATLIBLINK="\$(top_builddir)/libs/expat/libexpat\$(LA)"
+    LIBTARGETS="$LIBTARGETS expat"
+else
+    EXPATLIBINC=""
+    EXPATLIBLINK=""
+fi
+AC_SUBST(EXPATLIBINC)
+AC_SUBST(EXPATLIBLINK)
+
+# OpenSSL
+WITH_OPENSSL=no
+OPENSSLLIBINC=""
+OPENSSLLIBLINK=""
+
+AC_ARG_WITH(openssl,[  --with-openssl          include openssl support],[
+WITH_OPENSSL=$withval])
+
+if test "$WITH_OPENSSL" != "no" ; then
+  if test -d /usr/local/ssl ; then
+    WITH_OPENSSL=yes
+    OPENSSLLIBINC="-DPDF_FEATURE_DIGSIG -I/usr/local/ssl/include"
+    OPENSSLLIBLINK="-L/usr/local/ssl/lib -lcrypto -lssl"
+    LIBTARGETS="$LIBTARGETS expat"
+  else
+    WITH_OPENSLL=no
+  fi
+fi
+AC_SUBST(OPENSSLLIBINC)
+AC_SUBST(OPENSSLLIBLINK)
+
+# ICU Support
+WITH_ICU=no
+ICULIBINC=""
+ICULIBLINK=""
+ICUTLELIBINC=""
+ICUTLELIBLINK=""
+
+AC_ARG_ENABLE(icu,
+    [  --enable-icu            enable ICU support [default=no]],
+    WITH_ICU=$enableval)
+
+if test "$WITH_ICU" = "yes"; then
+    if test -d "libs/icu"; then
+        WITH_ICU=yes
+        ICUDIR="\$(top_builddir)/libs/icu"
+        ICULIBINC="-I$ICUDIR/include"
+        ICULIBLINK="-L$ICUDIR/lib -lsicuio -lsicuuc -lsicui18n -lsicudata -lsicule -lsiculx"
+
+	# icutle
+	if test -d libs/icutle ; then
+	    ICUTLELIBINC="-I\$(top_builddir)/libs/icutle"
+	    ICUTLELIBLINK="\$(top_builddir)/libs/icutle/libicutle\$(LA)"
+	    LIBTARGETS="$LIBTARGETS icutle"
+	fi
+    else
+	WITH_ICU=no
+    fi
+fi
+
+AC_SUBST(ICULIBINC)
+AC_SUBST(ICULIBLINK)
+AC_SUBST(ICUTLELIBINC)
+AC_SUBST(ICUTLELIBLINK)
+
+
+# ----------------------------------------------------------------
+#  PDFlib auxiliary library: PDI (PDF import library)
+# ----------------------------------------------------------------
+
+WITH_PDI=no
+
+AC_MSG_CHECKING(for PDF import library PDI)
+
+if test -d libs/pdi ; then
+    WITH_PDI=yes
+    dnl PDI must be in front because it needs zlib and pdcore
+    PDIMAKEOBJS="../pdi/Make_objs.inc"
+    PDILIBINC="-I\$(top_builddir)/libs/pdi"
+    PDILIBLINK="\$(top_builddir)/libs/pdi/libpdi\$(LA)"
+
+    LIBTARGETS="$LIBTARGETS pdi"
+    AC_MSG_RESULT(found)
+else
+    PDIMAKEOBJS=""
+    PDILIBINC=""
+    PDILIBLINK=""
+    AC_MSG_RESULT(not found)
+fi
+AC_SUBST(PDILIBINC)
+AC_SUBST(PDILIBLINK)
+AC_SUBST(PDIMAKEOBJS)
+
+# ----------------------------------------------------------------
+#  PDFlib auxiliary library: PLOP (PDF Linearization, Optimization, Privacy)
+# ----------------------------------------------------------------
+
+WITH_PLOP=no
+PLOPLIBINC=""
+PLOPLIBLINK=""
+PLOPLIB_LINK=""
+
+AC_MSG_CHECKING(for PDFlib PLOP (PDF Linearization, Optimization, Privacy))
+
+if test -d libs/plop ; then
+    WITH_PLOP=yes
+    AC_ARG_WITH(PLOP,[  --without-PLOP          don't include PLOP],[WITH_PLOP="$withval"])
+    LIBTARGETS="$LIBTARGETS plop"
+    PLOPLIBINC="-I\$(top_builddir)/libs/plop"
+    PLOPLIB_LINK="\$(topbuilddir)/libs/plop/libplop_\$(LA)"
+    if test "$WITH_PLOP" = "yes"; then
+	if test -d bind/plop ; then
+	    BINDTARGETS="$BINDTARGETS plop"
+	fi
+	if test -d progs/plop ; then
+	    PROGTARGETS="$PROGTARGETS plop"
+	fi
+	AC_MSG_RESULT(found)
+    else
+	AC_MSG_RESULT(not used)
+    fi
+else
+    AC_MSG_RESULT(not found)
+fi
+AC_SUBST(PLOPLIBINC)
+AC_SUBST(PLOPLIBLINK)
+AC_SUBST(PLOPLIB_LINK)
+
+# ----------------------------------------------------------------
+#  PDFlib main library: not needed for PLOP
+# ----------------------------------------------------------------
+
+dnl PDFLIBCONVENIENT contains all convenient libs to build shared libs
+dnl                  like PDFlib, and the wrapper libraries.
+dnl PDFLIBLINK       contains the files needed to link a program against PDFlib
+dnl PDFLIB_LINK      contains the files convenient lib
+dnl EXTERNALLIBS     contains extra libs to be added (i.e. -lm)
+
+EXTERNALLIBS="$EXTERNALLIBS $MATHLIB"
+
+WITH_PDFLIB=no
+
+AC_MSG_CHECKING(for PDFlib base library pdflib)
+
+if test -d libs/pdflib ; then
+    WITH_PDFLIB=yes
+    PDFLIBINC="-I\$(top_builddir)/libs/pdflib"
+    if test "$WITH_UNIVERSAL" = "yes"; then
+	PDFLIBLINK="\$(top_builddir)/libs/pdflib/.libs/libs_lib$PDFLIBNAME.al"
+print "UNIVERSAL: .libs/libs_libpdflib.al"
+    else
+	PDFLIBLINK="\$(top_builddir)/libs/pdflib/libs_lib$PDFLIBNAME\$(LA)"
+    fi
+    PDFLIB_LINK="\$(top_builddir)/libs/pdflib/libpdf_\$(LA)"
+    LIBTARGETS="$LIBTARGETS pdflib"
+    BINDTARGETS="$BINDTARGETS pdflib"
+    PROGTARGETS="$PROGTARGETS pdflib"
+    AC_MSG_RESULT(found)
+else
+    PDFLIBINC=""
+    PDFLIBLINK=""
+    PDFLIB_LINK=""
+    PDFLIBCONVENIENT=""
+    AC_MSG_RESULT(not found)
+fi
+
+AC_SUBST(PDFLIBCONVENIENT)
+AC_SUBST(PDFLIBINC)
+AC_SUBST(PDFLIBLINK)
+AC_SUBST(PDFLIB_LINK)
+
+
+# ----------------------------------------------------------------
+#  pCOS
+# ----------------------------------------------------------------
+
+WITH_PCOS=no
+PCOSLIBINC=""
+PCOSLIBLINK=""
+PCOSLIB_LINK=""
+
+AC_MSG_CHECKING(for pCOS)
+
+if test -d libs/pcos ; then
+    WITH_PCOS=yes
+    AC_ARG_WITH(PCOS,[  --without-PCOS          don't include PCOS],[WITH_PCOS="$withval"])
+    LIBTARGETS="$LIBTARGETS pcos"
+    PCOSLIBINC="-I\$(top_builddir)/libs/pcos"
+    PCOSLIB_LINK="\$(topbuilddir)/libs/pcos/libpcos_\$(LA)"
+    if test "$WITH_PCOS" = "yes"; then
+	BINDTARGETS="$BINDTARGETS pcos"
+	PROGTARGETS="$PROGTARGETS pcos"
+	PCOSLIBLINK="\$(topbuilddir)/libs/pcos/libpcos\$(LA)"
+	AC_MSG_RESULT(found)
+    else
+	AC_MSG_RESULT(not used)
+    fi
+else
+    AC_MSG_RESULT(not found)
+fi
+AC_SUBST(PCOSLIBINC)
+AC_SUBST(PCOSLIBLINK)
+AC_SUBST(PCOSLIB_LINK)
+
+# ----------------------------------------------------------------
+#  PDFlib auxiliary library: TET
+# ----------------------------------------------------------------
+
+WITH_TET=no
+TETLIBINC=""
+TETLIBLINK=""
+TETLIB_LINK=""
+
+AC_MSG_CHECKING(for PDFlib TET)
+
+if test -d libs/tet ; then
+    WITH_TET=yes
+    AC_ARG_WITH(TET,[  --without-TET           don't include TET],[WITH_TET="$withval"])
+    if test "$WITH_TET" = "yes"; then
+	LIBTARGETS="$LIBTARGETS tet"
+	BINDTARGETS="$BINDTARGETS tet"
+	PROGTARGETS="$PROGTARGETS tet"
+	TETLIBINC="-I\$(top_builddir)/libs/tet"
+	TETLIBLINK="\$(topbuilddir)/libs/tet/libs_libtet\$(LA)"
+	TETLIB_LINK="\$(topbuilddir)/libs/tet/libtet_\$(LA)"
+	AC_MSG_RESULT(found)
+    else
+	AC_MSG_RESULT(not used)
+    fi
+else
+    AC_MSG_RESULT(not found)
+fi
+AC_SUBST(TETLIBINC)
+AC_SUBST(TETLIBLINK)
+AC_SUBST(TETLIB_LINK)
+
+# ----------------------------------------------------------------
+#  PDFlib auxiliary library: PDPAGE
+# ----------------------------------------------------------------
+
+WITH_PDPAGE=no
+
+AC_MSG_CHECKING(for PDFlib PDPAGE)
+
+if test -d libs/pdpage ; then
+    WITH_PDPAGE=yes
+fi
+if test "$WITH_PDPAGE" = "yes" ; then
+    LIBTARGETS="pdpage $LIBTARGETS"
+    PDPAGELIBINC="-I\$(top_builddir)/libs/pdpage"
+    PDPAGELIBLINK="\$(topbuilddir)/libs/pdpage/libpdpage\$(LA)"
+    AC_MSG_RESULT(found)
+else
+    PDPAGELIBINC=""
+    PDPAGELIBLINK=""
+    AC_MSG_RESULT(not found)
+fi
+AC_SUBST(PDPAGELIBINC)
+AC_SUBST(PDPAGELIBLINK)
+
+# ----------------------------------------------------------------
+#  PDFlib auxiliary library: cl
+# ----------------------------------------------------------------
+#
+WITH_CL=no
+CLLIBINC=""
+CLLIBLINK=""
+
+AC_MSG_CHECKING(for PDFlib lib CL)
+
+if test -d libs/cl ; then
+    WITH_CL=yes
+    AC_ARG_WITH(CL,[  --without-CL            don't include CL],[WITH_CL="$withval"])
+    if test "$WITH_CL" = "yes"; then
+	LIBTARGETS="$LIBTARGETS cl"
+	CLLIBINC="-I\$(top_builddir)/libs/cl"
+	CLLIBLINK="\$(topbuilddir)/libs/cl/libcl\$(LA)"
+	AC_MSG_RESULT(found)
+    else
+	AC_MSG_RESULT(not used)
+    fi
+else
+    AC_MSG_RESULT(not found)
+fi
+AC_SUBST(CLLIBINC)
+AC_SUBST(CLLIBLINK)
+
+# ----------------------------------------------------------------
+#  PDFlib internal utilities library: util
+# ----------------------------------------------------------------
+#
+UTILLIBINC=""
+UTILLIBLINK=""
+
+if test -d intern/libs/util ; then
+    UTILLIBINC="-I\$(top_builddir)/intern/libs/util"
+    UTILLIBLINK="\$(topbuilddir)/intern/libs/util/libutil\$(LA)"
+fi
+AC_SUBST(UTILLIBINC)
+AC_SUBST(UTILLIBLINK)
+
+ATSLIBINC=""
+ATSLIBLINK=""
+
+if test -d intern/libs/util ; then
+    ATSLIBINC="-I\$(top_builddir)/intern/libs/ats"
+    ATSLIBLINK="\$(topbuilddir)/intern/libs/ats/libats\$(LA)"
+fi
+AC_SUBST(ATSLIBINC)
+AC_SUBST(ATSLIBLINK)
+
+# --------------------------------------------------------------------
+# 	PDFlib C++ language binding
+# --------------------------------------------------------------------
+
+WITH_CXX=yes
+
+STDCPP=""
+
+AC_ARG_ENABLE(cxx,[  --enable-cxx            enable C++ language binding [default=yes]], WITH_CXX=$enableval)
+
+if test "$WITH_CXX" = "yes"; then
+    AC_LANG_CPLUSPLUS
+    AC_PROG_CXX
+    AC_MSG_CHECKING(whether the previously found C++ compiler works)
+    AC_TRY_COMPILE(, [class a { int b; } ], WITH_CXX=yes, WITH_CXX=no)
+    AC_LANG_C
+
+    case $ac_sys_system/$ac_sys_release in
+	osf1*|OSF1*) STDCPP="";;
+
+	*)	dnl don't change $WITH_CXX
+		;;
+    esac
+
+    dnl If working with gcc add the name of the stdc++ library
+    if test "x$GCC" != "x"; then
+	STDCPP="-lstdc++"
+    fi
+
+    if test "$WITH_CXX" = "yes"; then
+	AC_SUBST(STDCPP)
+	AC_SUBST(CXX)
+	AC_MSG_RESULT(yes)
+    else
+	AC_MSG_RESULT(no)
+    fi
+fi
+
+# ----------------------------------------------------------------
+#  PDFlib wrapup
+# ----------------------------------------------------------------
+
+dnl The following variables are used to tell the Makefile what to
+dnl actually do, depending on the available language bindings.
+dnl PDFlib itself will be built and installed by default, regardless
+dnl of the settings below.
+
+dnl PDI must be in front because it needs zlib and pdcore
+
+dnl pedantic warnings ??
+WITHPEDANTIC=no
+AC_ARG_ENABLE(pedantic,[  --enable-pedantic       enable pedantic warnings (gcc only)]], WITHPEDANTIC=$enableval)
+
+dnl If working with gcc and we want pedantic
+if test "x$GCC" != "x"; then
+    dnl -Wall special handling for bindings
+    PDFWALL="-Wall"
+    if test "$WITHPEDANTIC" = "yes"; then
+	dnl Add more warnings if pedantic is on (by default only on Linux)
+	PDFCPEDANTIC="-Wmissing-declarations"
+	PDFPEDANTIC="-Wshadow -Wpointer-arith -Wstrict-prototypes -Wmissing-prototypes -Wunused-parameter \$(PDFCPEDANTIC)"
+    fi
+fi
+
+if test "$WITH_LARGE_FILES" = "yes"; then
+    dnl activeate the 2GB compiler options
+    case $ac_sys_system in
+    *OS/390*)
+	CFLAGS="$CFLAGS -D_LARGE_FILES=1 -D_LARGEFILE_SOURCE" ;;
+    aix*|AIX*)
+	CFLAGS="$CFLAGS -D_LARGE_FILES=1 -D_LARGEFILE_SOURCE" ;;
+    *)
+	CFLAGS="$CFLAGS -D_LARGEFILE_SOURCE -D_FILE_OFFSET_BITS=64" ;;
+    esac
+else
+    if test "$WITHPEDANTIC" = "yes"; then
+	dnl the GCC -ansi is possible only without LARGE_FILES
+	if test "x$GCC" != "x"; then
+	  PDFPEDANTIC="$PDFPEDANTIC -ansi -pedantic "
+	fi
+    fi
+fi
+
+
+AC_SUBST(PDFWALL)
+AC_SUBST(PDFCPEDANTIC)
+AC_SUBST(PDFPEDANTIC)
+
+BINDINGS="c"
+PLOPBINDINGS="c"
+TETBINDINGS="c cpp"
+PCOSBINDINGS="c cpp"
+
+dnl We hope to build shared libraries on this platform
+WITH_SHARED=yes
+
+if ${CONFIG_SHELL-/bin/sh} ./libtool --features | grep "disable shared" >/dev/null; then
+    WITH_SHARED=no
+fi
+
+dnl Building the language wrappers based on a shared PDFlib is no longer supported!
+if test "$WITH_SHARED" = "no"; then
+    WITH_JAVA=no
+    WITH_PERL=no
+    WITH_PYTHON=no
+    WITH_RUBY=no
+    WITH_TCL=no
+fi
+
+if test "$WITH_CXX" = "yes" ; then
+    BINDINGS="$BINDINGS cpp"
+fi
+if test "$WITH_JAVA" = "yes" ; then
+    BINDINGS="$BINDINGS java"
+    PLOPBINDINGS="$PLOPBINDINGS java"
+    TETBINDINGS="$TETBINDINGS java"
+    PCOSBINDINGS="$PCOSBINDINGS java"
+fi
+
+if test -f progs/Makefile ; then
+    PROGSDIR="progs"
+fi
+
+if test -f intern/Makefile ; then
+    INTERNDIR="intern"
+fi
+
+CFLAGS="$CFLAGS $PLATFORM"
+
+PDFLIBCONVENIENT="$PDFLIB_LINK \$(top_builddir)/libs/pdflib/\$(OO)/pdflib\$(LO) $PDCORELIBLINK $PNGLIBLINK $FLATELIBLINK $TIFFLIBLINK $PDILIBLINK $JPEGLIBLINK $PLOPLIB_LINK $FONTLIBLINK $PDPAGELIBLINK $EXPATLIBLINK"
+
+if test "$WITH_SHARED" = "no"; then
+    dnl We can generate a static lib only, but not a shared
+    RPATH=""
+else
+    dnl we generate both static and shared libs
+    RPATH="-rpath \$(libdir) -version-info \$(LTVERSIONINFO)"
+
+fi
+
+AC_SUBST(JAVA_COMPATIBILITY)
+AC_SUBST(LIBTARGETS)
+AC_SUBST(BINDTARGETS)
+AC_SUBST(PROGTARGETS)
+AC_SUBST(BINDINGS)
+AC_SUBST(PLOPBINDINGS)
+AC_SUBST(TETBINDINGS)
+AC_SUBST(PCOSBINDINGS)
+AC_SUBST(PTFDIR)
+AC_SUBST(PROGSDIR)
+AC_SUBST(INTERNDIR)
+AC_SUBST(WITH_PDI)
+
+AC_SUBST(RPATH)
+AC_SUBST(LDFLAGS)
+AC_SUBST(EXTERNALLIBS)
+
+AC_SUBST(DEFS)
+AC_SUBST(CFLAGS)
+AC_SUBST(CXXFLAGS)
+AC_SUBST(CPPFLAGS)
+AC_SUBST(WITH_SHARED)
+
+
+dnl ------------ Generate various config files
+
+if test -f pdflib-config.in ; then
+    GENERATED_FILES="$GENERATED_FILES pdflib-config"
+fi
+
+# for USS XPLINK a special mkcommon.inc is created and then copied over the standard mkcommon.inc
+if test "$WITH_XPLINK" = "yes" ; then
+    GENERATED_FILES="$GENERATED_FILES config/mkbind.uss_xplink.inc config/mkcommon.uss_xplink.inc config/mklibs.uss_xplink.inc config/mkmainlib.uss_xplink.inc config/mkprogs.uss_xplink.inc config/mkpsubdirs.inc config/mksubdirs.inc"
+else
+  if test "$WITH_UNIVERSAL" = "yes"; then
+print "UNIVERSAL: create mklibs.inc.mac"
+    GENERATED_FILES="$GENERATED_FILES config/mkbind.inc.mac config/mkcommon.inc.mac config/mklibs.inc.mac config/mkmainlib.inc.mac config/mkprogs.inc config/mkpsubdirs.inc config/mkprogs.inc.mac config/mksubdirs.inc"
+  else
+    GENERATED_FILES="$GENERATED_FILES config/mkbind.inc config/mkcommon.inc config/mklibs.inc config/mkmainlib.inc config/mkprogs.inc config/mkpsubdirs.inc config/mksubdirs.inc"
+  fi
+fi
+
+if test -d intern/libs/util ; then
+    GENERATED_FILES="$GENERATED_FILES config/mkats.inc"
+fi
+
+AC_OUTPUT([$GENERATED_FILES],[
+    if test -f pdflib-config.in ; then
+	chmod +x pdflib-config
+    fi
+])
+
+# for USS XPLINK a special mk*.incs are created and then copied over the
+# standard pathnames
+if test "$WITH_XPLINK" = "yes" ; then
+    mv config/mkcommon.uss_xplink.inc config/mkcommon.inc
+    mv config/mklibs.uss_xplink.inc config/mklibs.inc
+    mv config/mkmainlib.uss_xplink.inc config/mkmainlib.inc
+    mv config/mkprogs.uss_xplink.inc config/mkprogs.inc
+    mv config/mkbind.uss_xplink.inc config/mkbind.inc
+fi
+
+if test "$WITH_UNIVERSAL" = "yes"; then
+print "UNIVERSAL: mv mklibs.inc.mac"
+    mv config/mkcommon.inc.mac config/mkcommon.inc
+    mv config/mklibs.inc.mac config/mklibs.inc
+    mv config/mkmainlib.inc.mac config/mkmainlib.inc
+    mv config/mkbind.inc.mac config/mkbind.inc
+    mv config/mkprogs.inc.mac config/mkprogs.inc
+fi
+
+if test "$WITH_SHARED" = "no" ; then
+    AC_MSG_WARN([Can't create shared PDFlib libraries on this platform.])
+    AC_MSG_WARN([PDFlib will work when linked to a C or C++ program,])
+    AC_MSG_WARN([but other language bindings will be unavailable.])
+fi
+
+if test "$WITH_PLOP" = "yes" ; then
+AC_MSG_RESULT([_____________________________________________________________])
+AC_MSG_RESULT([For your convenience, here's a summary of configure's results:])
+AC_MSG_RESULT([Java language binding for PLOP:       $WITH_JAVA])
+fi
+
+if test "$WITH_TET" = "yes" ; then
+AC_MSG_RESULT([_____________________________________________________________])
+AC_MSG_RESULT([For your convenience, here's a summary of configure's results:])
+AC_MSG_RESULT([Java language binding for TET:       $WITH_JAVA])
+AC_MSG_RESULT([Perl language binding for TET:       $WITH_PERL])
+fi
+
+if test "$WITH_PDFLIB" = "yes" ; then
+AC_MSG_RESULT([_____________________________________________________________])
+AC_MSG_RESULT([For your convenience, here's a summary of configure's results:])
+AC_MSG_RESULT([])
+AC_MSG_RESULT([Support for shared libraries:           $WITH_SHARED])
+AC_MSG_RESULT([C++ language binding for PDFlib:        $WITH_CXX])
+AC_MSG_RESULT([Java language binding for PDFlib:       $WITH_JAVA])
+AC_MSG_RESULT([Perl language binding for PDFlib:       $WITH_PERL])
+AC_MSG_RESULT([Python language binding for PDFlib:     $WITH_PYTHON])
+AC_MSG_RESULT([Ruby language binding for PDFlib:       $WITH_RUBY])
+AC_MSG_RESULT([Tcl language binding for PDFlib:        $WITH_TCL])
+AC_MSG_RESULT([PDF import library (PDI):               $WITH_PDI])
+AC_MSG_RESULT([Large file support:                     $WITH_LARGE_FILES])
+if test "$WITH_ICU" = "yes" ; then
+AC_MSG_RESULT([ICU Library support:                    $WITH_ICU])
+fi
+
+if test "$WITH_PDI" = "no" ; then
+    AC_MSG_RESULT([     Note: if you purchase the additional PDF import library (PDI)])
+    AC_MSG_RESULT([     you can also manipulate existing PDF documents with PDFlib.])
+    AC_MSG_RESULT([     The additional block feature can be used to personalize PDF.])
+    AC_MSG_RESULT([     See http://www.pdflib.com for details.])
+fi
+fi
+
+AC_MSG_RESULT([])
+AC_MSG_RESULT([Please observe the licensing terms for commercial PDFlib usage.])
+AC_MSG_RESULT([PDFlib license agreement and purchase order can be found in the doc directory.])
+AC_MSG_RESULT([])

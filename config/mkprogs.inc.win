@@ -1,0 +1,44 @@
+# $Id: mkprogs.inc.win,v 1.2.2.5 2008/06/02 19:31:11 rjs Exp $
+# vim: syntax=make noexpandtab
+
+PROGS_BUILD = $(CC) $(CPPFLAGS) $(CFLAGS) $(WINCFLAGS) $*.c $(EXTRA_SOURCES)
+CXXPROGS_BUILD = $(CC) /c $(CPPFLAGS) $(CXXFLAGS) $(WINCFLAGS) /EHsc $*.cpp \
+    $(EXTRA_SOURCES)
+PROGS_LINK = $(LD) $(LDFLAGS) $*.obj $(EXTRA_OBJS) $(WIN_LDLIBS) $(LIBS) \
+    $(SETARGVLIB) /out:$@
+CXXPROGS_LINK = $(LD) $(LDFLAGS) $*.obj $(EXTRA_OBJS) $(WIN_LDLIBS) $(LIBS) \
+    $(SETARGVLIB) /out:$@
+    
+all::    $(PROGS)
+
+clean::
+	-$(RM) *.$(OBJ) *$(LO) *$(LA) $(PROGS) *.bak .libs
+
+distclean:: clean
+	-$(RM) m.out ms.out
+
+depend::
+
+ctags::
+
+install::
+
+uninstall::
+
+test::
+
+smoke::
+
+.PHONY: clean
+
+.dummy:
+
+.SUFFIXES: .c .cpp .obj
+
+.cpp.obj:
+	$(CC) /c /MT $(CPPFLAGS) $(CXXFLAGS) $(WINCFLAGS) /EHsc $<
+
+.c.obj:
+	$(CC) /c /MT $(CPPFLAGS) $(CFLAGS) $(WINCFLAGS) $<
+
+

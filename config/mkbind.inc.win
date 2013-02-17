@@ -1,0 +1,35 @@
+# $Id: mkbind.inc.win,v 1.2.2.1 2006/10/26 10:50:06 rjs Exp $
+# vim: syntax=make noexpandtab
+
+LIBNAME = $(_LIBNAME)$(DLL)
+
+all:: $(LIBNAME) $(BASEPROGS)
+
+# The actual shared library for the language support
+$(LIBNAME):: $(DEPLIBS) $(OBJ)
+	$(LD) $(DLL_LDFLAGS) /out:$@ /implib:"$(_LIBNAME).lib" $(OBJ) \
+	$(LIBS) $(WIN_LDLIBS) $(LIBS)
+
+
+clean::
+	-$(RM) *.$(OBJ) *$(LO) *$(LA) $(LIBNAME) *.bak .libs *.pdf
+
+distclean:: clean
+	-$(RM) m.out ms.out
+
+depend:: .dummy
+
+ctags::
+
+install::
+
+uninstall::
+
+.PHONY: clean
+
+.dummy:
+
+.SUFFIXES: .c .obj
+
+.c.obj:
+	$(CC) -c $(CPPFLAGS) $(CFLAGS) /D "_LIB" $<

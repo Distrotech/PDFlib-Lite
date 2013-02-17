@@ -1,0 +1,55 @@
+# Template to be included from every makefile that creates libs
+# $Id: mkmainlib.inc.win,v 1.4.2.1 2008/03/19 23:48:57 rjs Exp $
+# vim: syntax=make noexpandtab
+#
+
+# TODO:
+# - PLOP/TET/pCOS builds vorsehen
+# - Object files in eigene Directories legen
+# - Cleanup der FLAGS
+
+!IF "$(TARGET)" == "Debug"
+MAINLIBNAME	= "Debug$(OO_SUFFIX)/$(MAINLIB)lib.lib"
+!ELSEIF "$(TARGET)" == "Release_DLL"
+MAINLIBNAME	= "Release_DLL$(OO_SUFFIX)/$(MAINLIB)lib.dll"
+!ELSEIF "$(TARGET)" == "Release_NET"
+MAINLIBNAME	= "Release_NET$(OO_SUFFIX)/$(MAINLIB)lib.lib"
+!ELSEIF "$(TARGET)" == "Release_MD"
+MAINLIBNAME	= "Release_MD$(OO_SUFFIX)/$(MAINLIB)lib.lib"
+!ELSE
+MAINLIBNAME	= "Release$(OO_SUFFIX)/$(MAINLIB)lib.lib"
+!ENDIF
+
+
+LIBLINKSELF     = $(MAINOBJ) $(INTERNALLIBS) $(EXTERNALLIBS)
+
+all::	$(MAINLIBNAME)
+
+Release$(OO_SUFFIX)/$(MAINLIB)lib.lib: $(MAINOBJ) $(INTERNALLIBS)
+	lib.exe /nologo /out:$@ $(LIBLINKSELF)
+
+Release_NET$(OO_SUFFIX)/$(MAINLIB)lib.lib: $(MAINOBJ) $(INTERNALLIBS)
+	lib.exe /nologo /out:$@ $(LIBLINKSELF)
+
+Release_MD$(OO_SUFFIX)/$(MAINLIB)lib.lib: $(MAINOBJ) $(INTERNALLIBS)
+	lib.exe /nologo /out:$@ $(LIBLINKSELF)
+
+Debug$(OO_SUFFIX)/$(MAINLIB)lib.lib: $(MAINOBJ) $(INTERNALLIBS)
+	lib.exe /nologo /out:$@ $(LIBLINKSELF)
+
+Release_dll$(OO_SUFFIX)/$(MAINLIB)lib.dll: pdflib.res $(MAINOBJ) $(INTERNALLIBS)
+	link.exe $(DLL_LDFLAGS) /implib:Release_DLL$(OO_SUFFIX)/$(MAINLIB)lib.lib\
+	/out:$@ $(LIBLINKSELF) $(WIN_LDLIBS) $(MAINLIB)lib.res
+
+
+pdflib.res: pdflib.rc
+	$(RC) $(RCFLAGS) pdflib.rc
+
+clean::
+	-$(RM) $(MAINLIBNAME) pdflib.res *.obj
+
+# suffixes
+.SUFFIXES: .rc .res
+
+.rc.res:
+	$(RC) $(RCFLAGS) $<

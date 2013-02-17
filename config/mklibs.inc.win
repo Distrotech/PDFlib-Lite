@@ -1,0 +1,41 @@
+# Template to be included from every makefile that creates libs
+# $Id: mklibs.inc.win,v 1.4.2.3 2008/05/30 12:48:16 rjs Exp $
+# vim: syntax=make noexpandtab
+#
+
+all::	$(LIBNAME)
+
+$(LIBNAME): $(OO) $(OBJS)
+	$(LD) -lib $(LDFLAGS) /out:$@ $(OBJS)
+
+$(OO):
+	-$(MKDIR) $(OO)
+
+clean::
+	-$(RM) $(OBJS) $(OO)$(PATHSEP)*$(LA) *.bak
+
+distclean:: clean
+	-$(RM) m.out ms.out
+
+depend::
+
+install::
+
+uninstall::
+
+test::
+
+smoke::
+
+.PHONY: clean
+
+.dummy:
+
+# suffixes
+.SUFFIXES: .c .obj .cpp
+
+{}.c{$(OO)}.obj:
+	$(CC) $(CPPFLAGS) $(CFLAGS) /Fo"$(OO)/" /D "_LIB" $<
+
+{}.cpp{$(OO)}.obj:
+	$(CC) $(CPPFLAGS) $(CXXFLAGS) /EHsc /Fo"$(OO)/" /D "_LIB" $<

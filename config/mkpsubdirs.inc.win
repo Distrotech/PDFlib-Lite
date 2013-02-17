@@ -1,0 +1,29 @@
+# Template to be included from every makefile that handles subdirs
+# $Id: mkpsubdirs.inc.win,v 1.1.4.1 2007/04/30 07:39:51 rjs Exp $
+# vim: syntax=make noexpandtab
+#
+# Windows Version, inpired by Windows SDK examples
+#
+# The Makefile that uses this template has to set
+# SUB_DIRS = foo\~ ...
+
+!ifdef clean
+makeopts = clean=1
+!endif # clean
+
+# ------------------------- default target  -------------------------------
+all::	$(PSUB_DIRS)
+
+clean::
+	$(MAKE) -nologo makeopts=clean
+
+test::
+	$(MAKE) -nologo makeopts=test
+
+$(PSUB_DIRS):
+	@IF EXIST $(@D)\Makefile <<nmaketmp.bat
+	@cd $(@D)
+	@echo *** %CD% *** $(makeopts)
+	@$(MAKE) -nologo /$(MAKEFLAGS) $(makeopts)
+	@cd ..
+<<

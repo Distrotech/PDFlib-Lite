@@ -1,0 +1,319 @@
+# Template to be included from every makefile that creates libs/progs
+# $Id: mkcommon.inc.win-lite,v 1.1.2.1 2010/04/29 13:24:04 rjs Exp $
+# vim: syntax=make noexpandtab
+#
+# Windows version to be used with nmake only
+
+!IF !DEFINED(CPU) || "$(CPU)" == ""
+!IF DEFINED(PROCESSOR_ARCHITEW6432)
+CPU = $(PROCESSOR_ARCHITEW6432)
+!ELSE
+CPU = $(PROCESSOR_ARCHITECTURE)
+!ENDIF #W6432
+!ENDIF # CPU
+
+# if PROCESSOR_ARCHITECTURE was x86 or X86 change CPU to i386
+
+# add a suffix to $(OO) to be able to build 32-bit and 64-bit in the same
+# view; to remain backward-compatible with existing scripts for X86 no
+# suffix is added
+!IF ( "$(CPU)" == "AMD64" )
+WINxxDEF        = /D "WIN64" /D "WIN32"
+MACHINE = X64
+OO_SUFFIX = _X64
+!ELSEIF ( "$(CPU)" == "IA64" )
+WINxxDEF        = /D "WIN64"
+MACHINE = IA64
+OO_SUFFIX = _IA64
+!ELSE
+WINxxDEF        = /D "WIN32"
+MACHINE = X86
+OO_SUFFIX =
+!ENDIF
+
+# detect English system needed for some ATS Runs
+!IF ( "$(PROGRAMFILES)" == "C:\Programme" )
+ENGLISH_WINDOWS_SYSTEM =
+!ELSE
+ENGLISH_WINDOWS_SYSTEM = /D ENGLISH_WINDOWS_SYSTEM
+!ENDIF
+
+# see which compiler we are using
+# this is not perfect, but till now we don't know a better method finding
+# out which compiler is used
+# the VS8 (aka VS 2005) settings are compatible to VS9 and VS10 (aka VS 2008/10)
+# if we need to make a different setup for VS9 "Framework35Version=v3.5" should
+# be checked
+
+!IF ( "$(FRAMEWORKVERSION)" == "v4.0.30319" )
+COMPILER_VERS   = VS8
+!ELSEIF ( "$(FRAMEWORKVERSION)" == "v2.0.50727" )
+COMPILER_VERS   = VS8
+!ELSEIF ( "$(FRAMEWORKVERSION)" == "v1.1.4322" )
+COMPILER_VERS   = VS7
+!ELSE
+COMPILER_VERS   = VS6
+OO_SUFFIX = _VS6
+!ENDIF
+
+
+srcdir          = .
+OO              = .
+PATHSEP         = \\
+CLASSPATHSEP    = ;
+
+topbuilddir     = $(top_builddir)
+
+# general stuff (configure)
+VERSION         = 7.0.0
+WINVERS		= 7.0
+SHELL           = cmd.exe
+INSTALL         =
+INSTALL_DATA    =
+EXE             = .exe
+OBJ             = .obj
+CC              = cl.exe
+LD              = link.exe
+LDFLAGS         = /nologo
+CPPFLAGS	= $(INCLUDES)
+CXX             = cl.exe
+STDCPP          =
+
+!IF ( "$(BASH)" == "/usr/bin/bash" )
+RM              = rm -rf
+MKDIR           = mkdir
+MOVE            = mv
+!ELSE
+RM              = del /s /q
+MKDIR           = mkdir
+MOVE            = move
+!ENDIF
+
+BINDINGS        = c\~ java\~
+PLOPBINDINGS    =
+LIBTARGETS      = pdcore\~ pdpage\~ flate\~ jpeg\~ expat\~ font\~ png\~ tiff\~ pdi\~ plop\~ pdflib\~ cl\~
+BINDTARGETS     = pdflib\~
+PROGTARGETS     = pdflib\~ pdi\~
+STDDIRS         = libs\~ bind\~
+ATSDIR          =
+INTERNDIR       = intern\~
+SUB		= \~
+
+# build related stuff (configure)
+# Windows specific
+
+# use ASM Module for flate match() routines?
+!IF ( "$(CPU)" == "AMD64" )
+!ELSEIF ( "$(CPU)" == "IA64" )
+!ELSEIF ( "$(PDFLIB_ASM_BUILD)" == "true" )
+AS 		= ml.exe
+ASM_CFLAGS	= /D ASMV /DASMINF
+ASFLAGS		= /coff /nologo /c
+FLATE_ASM_OBJ   = \
+        $(OO)$(PATHSEP)gvmat32c$(LO) \
+        $(OO)$(PATHSEP)gvmat32$(LO) \
+        $(OO)$(PATHSEP)inffas32$(LO)
+!ENDIF
+
+# COMPILED_FROM_DSP: for expat to detect Windows Builds
+# _CRT_SECURE_NO_DEPRECATE: for VS2005 to avoid tons of warnings about deprected#   functions
+# _WINDOWS: don't know why, but seems to be better to habe this defined
+# PDFLIB_EXPORTS: used in pdflib.h to create DLL compatible API's
+
+PDFPEDANTIC_VS8 = /W3 /wd4290 /D "_CRT_SECURE_NO_DEPRECATE"
+PDFPEDANTIC_VS6 = /W3
+
+!IF ( "$(COMPILER_VERS)" == "VS8" )
+PDFPEDANTIC     = $(PDFPEDANTIC_VS8)
+!ELSE
+PDFPEDANTIC     = $(PDFPEDANTIC_VS6)
+!ENDIF
+
+DEFINES         = /nologo /c $(PDFPEDANTIC) $(ASM_CFLAGS) \
+                  $(WINxxDEF) /D "_MBCS" /D "_MT" /D "_WINDOWS" \
+                  /D "COMPILED_FROM_DSP"
+
+# Debug Options:
+# /GX: synchronous exception handling
+# /GY: enable runtimechecks (deprecated in VS8 use /RTC1)
+DEBUG_DEFS_VS8  = /Od /GX /ZI /GZ /D "_DEBUG" /FR$(OO) /YX /Fd$(OO)
+DEBUG_DEFS_VS6  = /Od /ehSC /RTC1 /D "_DEBUG"
+!IF ( "$(COMPILER_VERS)" == "VS8" )
+DEBUG_DEFS          = $(DEBUG_DEFS_VS8)
+CXX_DEFS            = /EHsc
+!ELSE
+DEBUG_DEFS          = $(DEBUG_DEFS_VS6)
+CXX_DEFS            =
+!ENDIF
+DEFS            = /O2 /D "NDEBUG"
+
+# /EHsc specify the synchronous exception handling model,
+#       extern C functions never throw an exception
+# /clr  Common Language Runtime Compilation
+#       Probably has to be changed then used with VS8 (/clr:oldSyntax ??)
+DOTNET_DEFS     = $(DEFS) /D "_WINDLL" /TP /EHa /clr
+COM_DEFS        = /D "_USRDLL" /D "_ATL_STATIC_REGISTRY" \
+                  /D "PDFLIB_STATIC" /D "_LIB" /EHsc
+COM_LDFLAGS     = /nologo /base:"0x55310000" /version:7.0 /subsystem:windows \
+                  /dll /machine:$(MACHINE)
+
+
+# Various Build Targets explained:
+#
+# Debug:        the standard build target with /MT
+# Release:      the standard target with /MT
+# Release_DLL   the target with special code for building a DLL Version
+# Release_MD    the target with /MD (used in some rare cases where other
+#               applications need to be linked against dynamic MSVCRT.lib
+#               instead of static LIBCMT.lib
+# Release_NET   the target with /clr set to create managed code for .NET
+!IF "$(TARGET)" == "Debug"
+OO     = Debug$(OO_SUFFIX)
+CFLAGS = /MTd $(DEBUG_DEFS) $(DEFINES) $(INCLUDES) $(MYCFLAGS)
+CXXFLAGS = /nologo /MTd $(CXX_DEFS) $(DEBUG_DEFS) $(DEFINES) $(INCLUDES) $(MYCFLAGS)
+!ELSEIF "$(TARGET)" == "Release_DLL"
+# PDFLIB_EXPORTS: used in pdflib.h to create DLL compatible API's
+OO     = Release_DLL$(OO_SUFFIX)
+CFLAGS = /MT  /D "PDFLIB_EXPORTS" $(DEFS) $(DEFINES) $(INCLUDES) $(MYCFLAGS)
+CXXFLAGS = /nologo /MT  /D "PDFLIB_EXPORTS" $(CXX_DEFS) $(DEFS) $(DEFINES) $(INCLUDES) $(MYCFLAGS)
+!ELSEIF "$(TARGET)" == "Release_MD"
+OO     = Release_MD$(OO_SUFFIX)
+CFLAGS = /MD $(DEFS) $(DEFINES) $(INCLUDES) $(MYCFLAGS)
+CXXFLAGS = /nologo /MD $(CXX_DEFS) $(DEFS) $(DEFINES) $(INCLUDES) $(MYCFLAGS)
+!ELSEIF "$(TARGET)" == "Release_NET"
+OO     = Release_NET$(OO_SUFFIX)
+CFLAGS = /MD $(DOTNET_DEFS) $(DEFINES) $(INCLUDES) $(MYCFLAGS) $(PROGFLAGS) /wd4793
+!ELSE
+# Relase build, the default
+OO     = Release$(OO_SUFFIX)
+CFLAGS = /MT $(DEFS) $(DEFINES) $(INCLUDES) $(MYCFLAGS)
+CXXFLAGS = /nologo /MT $(CXX_DEFS) $(DEFS) $(DEFINES) $(INCLUDES) $(MYCFLAGS)
+!ENDIF
+
+# to link DLL's
+!IF "$(TARGET)" == "Debug"
+DLLDEBUGFLAGS    = /debug
+!ELSE
+DLLDEBUGFLAGS    =
+!ENDIF
+DLL_LDFLAGS     = /nologo /dll "/base:0x55300000" "/version:$(WINVERS)" $(DLLDEBUGFLAGS)
+WIN_LDLIBS      = advapi32.lib user32.lib gdi32.lib
+SETARGVLIB      = setargv.obj
+
+# libtool specific
+LA                 = .lib
+LO                 = .obj
+DLL                = .dll
+WITH_SHARED        =
+RPATH              =
+
+LIBTOOL            =
+LIBTOOL_CC         =
+LIBTOOL_LD         =
+LIBTOOL_EXE        =
+
+# Perl and other bindings
+PERLLIBDIR      =
+PERLINCLUDE     =
+PERLLINK        =
+PERL            =
+PERLBOOLDEF     =
+
+PYTHONLIBDIR    =
+PYINCLUDE       =
+
+RUBYINCLUDE     =
+
+TCLINCLUDE      = /I "c:/programme/tcl8.5/include"
+TCLPACKAGEDIR   =
+TCLLIB          = /LIBPATH:"c:/programme/tcl8.5/lib" tclstub85.lib
+TCLBIN          = tclsh
+
+# Java
+JAVA_COMPATIBILITY	= -source 1.4
+
+!IF ( "$(CPU)" == "AMD64" )
+JAVAPATH        = C:/Program Files/Java/jdk1.5.0_09
+!ELSE
+JAVAPATH        = C:/Programme/j2sdk1.4.2_04
+!ENDIF
+
+JAVAINCLUDE     = /I "$(JAVAPATH)/include" /I "$(JAVAPATH)/include/win32"
+JAVA            = "$(JAVAPATH)/bin/java" -classpath "$(MYJAR);."
+JAVAC           = "$(JAVAPATH)/bin/javac" -classpath "$(MYJAR);."
+JAR             = "$(JAVAPATH)/bin/jar"
+
+
+# PDFlib includes
+PDFLIBINC       = /I "$(topbuilddir)/libs/pdflib"
+TIFFLIBINC      = /I "$(topbuilddir)/libs/tiff"
+JPEGLIBINC      = /I "$(topbuilddir)/libs/jpeg"
+ZLIBINC         = /I "$(topbuilddir)/libs/flate"
+FLATELIBINC     = /I "$(topbuilddir)/libs/flate"
+FONTLIBINC      = /I "$(topbuilddir)/libs/font"
+PNGLIBINC       = /I "$(topbuilddir)/libs/png"
+PDCORELIBINC    = /I "$(topbuilddir)/libs/pdcore"
+PDILIBINC       =
+PDPAGELIBINC    =
+PDULIBINC       =
+TETLIBINC       = /I "$(topbuilddir)/libs/tet"
+PCOSLIBINC      = /I "$(topbuilddir)/libs/pcos"
+PLOPLIBINC      =
+CLLIBINC        = /I "$(topbuilddir)/libs/cl"
+XMLLIBINC       =
+EXPATLIBINC     =
+UTILLIBINC      = /I "$(topbuilddir)/intern/libs/util"
+ATSLIBINC       = /I "$(topbuilddir)/intern/libs/ats"
+ICULIBINC       = /I "$(topbuilddir)/libs/icu"
+ICUTLELIBINC    = /I "$(topbuilddir)/libs/icutle"
+
+# libs stuff
+MATHLIB         =
+EXTERNALLIBS    =
+PDFLIBNAME      = pdf
+PDFLIB_LTVERSION=
+PLOP_LTVERSION  =
+TET_LTVERSION   =
+LTVERSIONINFO   = $(PDFLIB_LTVERSION)
+PDFLIBCONVENIENT= $(topbuilddir)/libs/pdflib/libpdf_$(LA) $(topbuilddir)/libs/pdcore/libpdcore$(LA) $(topbuilddir)/libs/png/libpng$(LA) $(topbuilddir)/libs/flate/libz$(LA) $(topbuilddir)/libs/font/libfont$(LA) $(topbuilddir)/libs/tiff/libtiff$(LA) $(topbuilddir)/libs/pdi/libpdi$(LA)
+CONVENIENT      = $(PDFLIBCONVENIENT)
+
+# libs
+PDFLIBLINK      = $(topbuilddir)/libs/pdflib/$(OO)/pdflib.lib
+PDFLIB_LINK     = $(topbuilddir)/libs/pdflib/$(OO)/libpdf_$(LA)
+TIFFLIBLINK     = $(topbuilddir)/libs/tiff/$(OO)/libtiff$(LA)
+JPEGLIBLINK     = $(topbuilddir)/libs/jpeg/$(OO)/libjpeg$(LA)
+FLATELIBLINK    = $(topbuilddir)/libs/flate/$(OO)/libz$(LA)
+FONTLIBLINK     = $(topbuilddir)/libs/font/$(OO)/libfont$(LA)
+PNGLIBLINK      = $(topbuilddir)/libs/png/$(OO)/libpng$(LA)
+PDCORELIBLINK   = $(topbuilddir)/libs/pdcore/$(OO)/libpdcore$(LA)
+PDILIBLINK      =
+PDPAGELIBLINK   =
+CLLIBLINK       = $(topbuilddir)/libs/cl/$(OO)/libcl$(LA)
+XMLLIBLINK      =
+EXPATLIBLINK    =
+PCOSLINK        = $(topbuilddir)/libs/pcos/$(OO)/libpcos$(LA)
+PCOS_LINK       = $(topbuilddir)/libs/pcos/$(OO)/libpcos_$(LA)
+PLOPLIBLINK     =
+PLOPLIB_LINK    =
+TETLIBLINK      = $(topbuilddir)/libs/tet/$(OO)/libtet$(LA)
+TETLIB_LINK     = $(topbuilddir)/libs/tet/$(OO)/libtet_$(LA)
+PDULIBLINK      =
+UTILLIBLINK     = $(topbuilddir)/intern/libs/util/$(OO)/libutil$(LA)
+ATSLIBLINK      = $(topbuilddir)/intern/libs/ats/$(OO)/libats$(LA)
+ICULIBLINK      = sicuin.lib  sicule.lib  sicutu.lib sicudt.lib  sicuio.lib  siculx.lib  sicuuc.lib
+ICUTLELIBLINK   = $(topbuilddir)/libs/icutle/$(OO)/libicutle$(LA)
+
+# libraries to link a shared library for the binding; this is special
+# for USS but on normal platforms this defaults to the standard shared libs
+BIND_PDFLIBLINK = $(PDFLIBLINK)
+BIND_PLOPLIBLINK =
+BIND_PCOSLIBLINK = $(PCOSLIBLINK)
+BIND_TETLIBLINK = $(TETLIBLINK)
+
+# installation directories (configure)
+prefix          =
+exec_prefix     =
+libdir          =
+includedir      =
+bindir          =
