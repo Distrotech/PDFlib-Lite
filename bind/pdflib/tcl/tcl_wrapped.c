@@ -1,3 +1,6 @@
+/* Set this to define when not useing stubs for tcl 8.6 compatibility. */
+#undef USE_INTERP_RESULT 1
+
 #if defined(_WRAP_CODE)
 
     
