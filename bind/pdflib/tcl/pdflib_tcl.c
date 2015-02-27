@@ -880,7 +880,7 @@ SWIGEXPORT(int,Pdflib_Init)(Tcl_Interp *interp)
  	return TCL_ERROR;
     }
 #else
-    if (Tcl_PkgRequire(interp, "Tcl", TCL_VERSION, 1) == NULL) {
+    if (Tcl_PkgRequire(interp, "Tcl", TCL_PATCH_LEVEL, 1) == NULL) {
  	return TCL_ERROR;
     }
 #endif
