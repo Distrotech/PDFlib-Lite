@@ -24,6 +24,8 @@
  * if building with older TCL Versions than 8.2 you have to undef this
  */
 #define USE_TCL_STUBS
+
+/* Tcl 8.6 Compatibility when undef USE_TCL_STUBS */
 #ifndef USE_TCL_STUBS
 #define USE_INTERP_RESULT 1
 #endif
