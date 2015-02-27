@@ -25,6 +25,11 @@
  */
 #define USE_TCL_STUBS
 
+/* Tcl 8.6 Compatibility when undef USE_TCL_STUBS */
+#ifndef USE_TCL_STUBS
+#define USE_INTERP_RESULT 1
+#endif
+
 #include <tcl.h>
 
 #include <string.h>
@@ -880,7 +885,7 @@ SWIGEXPORT(int,Pdflib_Init)(Tcl_Interp *interp)
  	return TCL_ERROR;
     }
 #else
-    if (Tcl_PkgRequire(interp, "Tcl", TCL_VERSION, 1) == NULL) {
+    if (Tcl_PkgRequire(interp, "Tcl", TCL_PATCH_LEVEL, 1) == NULL) {
  	return TCL_ERROR;
     }
 #endif
