@@ -50,4 +50,6 @@ Do the following for building PDFlib with Tcl 8.0 or 8.1:
 
 - #undef USE_TCL_STUBS in pdflib_tcl.c
 
+- #define USE_INTERP_RESULT 1 in tcl_wrapped.c
+
 - Add -ltcl to the linker command, and an appropriate -L option.
